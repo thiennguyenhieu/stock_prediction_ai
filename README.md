@@ -11,19 +11,19 @@ Requires **vnstock 3.2.0**
 
 ## 🚀 How to Run
 
-### 1️. Install Dependencies
+### 1. Install Dependencies
 Install the required packages:
 ```sh
 pip install -r requirements.txt
 ```
-### 2️. Fetch stock data
+### 2. Fetch stock data
 Fetch stock data:
 ```sh
 python fetch_stock_data.py
 ```
 This will fetch stock data and save it as `data/.._stock_data.csv`.
 
-### 3️. Train the Model
+### 3. Train the Model
 Before making predictions, train the XGBoost model using historical stock data:
 ```sh
 python model_trainer.py
