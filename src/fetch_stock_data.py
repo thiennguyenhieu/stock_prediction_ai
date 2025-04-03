@@ -54,4 +54,5 @@ if __name__ == "__main__":
     symbols = {'VNM', 'BSR', 'ACB', 'TCB'}  # Use a set for uniqueness
 
     stock_data = fetch_stock_data(source, symbols, start_date, end_date)
-    save_dataframe_to_csv(stock_data)
+    filename = f"data/{start_date}_{end_date}_stock_data.csv"
+    save_dataframe_to_csv(stock_data, filename)
