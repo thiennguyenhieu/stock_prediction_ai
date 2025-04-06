@@ -29,7 +29,7 @@ Fetch stock data:
 ```sh
 python src\fetch_stock_data.py
 ```
-This will fetch stock data and save it as `data/trained_stock_data.csv`,`data/test_stock_data.csv`.
+This will fetch stock data and save it as `data/stock_data.csv`.
 
 ### 3️⃣ Train the Model
 Before making predictions, train the CNN-LSTM model using historical stock data:
