@@ -2,12 +2,13 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import date, timedelta
-from src.fetch_stock_data import fetch_historical_data_for_display, fetch_prediction_data_for_display
+from src.fetch_stock_data import fetch_historical_data_for_display, fetch_prediction_data_for_display, fetch_all_symbols
 from src.fetch_news_data import fetch_news_with_sentiment
 
 # ------------------ Constants ------------------
 
-VALID_SYMBOLS = ['ACB', 'VCB', 'BID']
+valid_symbols_with_info = fetch_all_symbols() # Return [symbol, exchange, organ name]
+valid_symbols = valid_symbols_with_info.iloc[:, 0].tolist()
 LOOKBACK_DAYS = {"Last 7 Days": 7, "Last 30 Days": 30, "Last 60 Days": 60}
 FORECAST_DAYS = {"7 Days": 7, "30 Days": 30, "60 Days": 60}
 
@@ -75,6 +76,24 @@ def render_news_table(news_df: pd.DataFrame):
     """
     st.markdown(news_table_html, unsafe_allow_html=True)
 
+def get_stock_info_by_symbol(symbol: str, df) -> tuple:
+    """
+    Get exchange and organ_name based on symbol using column indexes.
+
+    Args:
+        symbol (str): Stock symbol to look up
+        df (pd.DataFrame): DataFrame with [symbol, exchange, organ_name]
+
+    Returns:
+        tuple: (exchange, organ_name) or (None, None) if not found
+    """
+    row = df[df.iloc[:, 0] == symbol]
+    if not row.empty:
+        exchange = row.iloc[0, 1]      # exchange is column index 1
+        organ_name = row.iloc[0, 2]    # organ_name is column index 2
+        return exchange, organ_name
+    return None, None
+
 # ------------------ UI Sidebar ------------------
 
 st.title("📈 Stock Predictor App")
@@ -92,7 +111,7 @@ if not predict_clicked:
     st.info("👈 Please use the sidebar to select stock symbol and forecast options, then click **Predict**.")
 
 if predict_clicked:
-    if symbol not in VALID_SYMBOLS:
+    if symbol not in valid_symbols:
         st.error(f"Symbol '{symbol}' not found in model data.")
     else:
         # --- Data Fetching ---
@@ -104,6 +123,12 @@ if predict_clicked:
         df_real = fetch_historical_data_for_display(symbol)
         df_pred = fetch_prediction_data_for_display(symbol, predict_start_date, forecast_days)
         news_df = fetch_news_with_sentiment(symbol)
+
+        # --- Stock information ---
+        exchange, organ_name = get_stock_info_by_symbol(symbol, valid_symbols_with_info)
+        st.markdown("&nbsp;", unsafe_allow_html=True)
+        st.subheader(f"🏢 {symbol} — {organ_name}")
+        st.markdown(f"**Exchange:** {exchange}")
 
         # --- Price Forecast Plot ---
         st.markdown("&nbsp;", unsafe_allow_html=True)

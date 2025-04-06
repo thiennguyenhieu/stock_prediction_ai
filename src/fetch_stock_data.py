@@ -19,7 +19,7 @@ def fetch_financial_data(symbol: str) -> pd.DataFrame:
 
     df = df.reset_index(drop=True)
     df.columns = df.columns.droplevel(0)  # Remove MultiIndex if exists
-    df.rename(columns={'ticker': 'symbol'}, inplace=True)
+    df.rename(columns={COL_TICKER: COL_SYMBOL}, inplace=True)
 
     return df
 
@@ -36,10 +36,10 @@ def fetch_historical_data(symbol: str, start_date: str, end_date: str) -> pd.Dat
     if df.empty:
         return pd.DataFrame()
 
-    df['time'] = pd.to_datetime(df['time'])
-    df['yearReport'] = df['time'].dt.year
-    df['lengthReport'] = df['time'].dt.quarter
-    df['symbol'] = symbol
+    df[COL_TIME] = pd.to_datetime(df[COL_TIME])
+    df[COL_YEAR_REPORT] = df[COL_TIME].dt.year
+    df[COL_QUARTER_REPORT] = df[COL_TIME].dt.quarter
+    df[COL_SYMBOL] = symbol
 
     return df
 
@@ -70,11 +70,19 @@ def fetch_prediction_data_for_display(symbol: str, start_date: str, forecast_int
     prices = [round(base_price + i * daily_increase, 2) for i in range(forecast_interval)]
 
     df_pred = pd.DataFrame({
-        'time': dates,
-        'close': prices
+        COL_TIME: dates,
+        COL_CLOSE: prices
     })
 
     return df_pred
+
+
+def fetch_all_symbols () -> pd.DataFrame:
+    df = Listing().symbols_by_exchange()
+    keep_cols = [COL_SYMBOL, COL_EXCHANGE, COL_ORGAN_NAME]
+    df = df[keep_cols]
+    
+    return df
 
 
 def process_symbol_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -95,7 +103,7 @@ def process_symbol_data(symbol: str, start_date: str, end_date: str) -> pd.DataF
 
     df_merged = pd.merge(
         df_price, df_financial,
-        on=['yearReport', 'lengthReport', 'symbol'],
+        on=[COL_YEAR_REPORT, COL_QUARTER_REPORT, COL_SYMBOL],
         how='left'
     )
 

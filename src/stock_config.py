@@ -3,6 +3,9 @@ SOURCE_DATA = 'VCI'
 # --- Core stock columns ---
 COL_TIME = 'time'
 COL_SYMBOL = 'symbol'
+COL_TICKER = 'ticker'
+COL_EXCHANGE = 'exchange'
+COL_ORGAN_NAME = 'organ_name'
 COL_OPEN = 'open'
 COL_HIGH = 'high'
 COL_LOW = 'low'
@@ -10,6 +13,8 @@ COL_CLOSE = 'close'
 COL_VOLUME = 'volume'
 
 # --- Financial ratio columns ---
+COL_YEAR_REPORT = 'yearReport'
+COL_QUARTER_REPORT = 'lengthReport'
 COL_NET_PROFIT_MARGIN = 'Net Profit Margin (%)'
 COL_ROE = 'ROE (%)'
 COL_ROIC = 'ROIC (%)'
