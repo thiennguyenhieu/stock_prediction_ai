@@ -43,7 +43,7 @@ streamlit run app.py
 ```
 This will start the app in your browser, where you can input stock data and get predictions.
 
-🧠 Features
+### 🧠 Features
 ✅ Loads and visualizes stock market data
 
 ✅ Predicts stock prices using CNN-LSTM deep learning
