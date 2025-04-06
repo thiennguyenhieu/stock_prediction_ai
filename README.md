@@ -14,8 +14,6 @@ This project is an AI-powered stock price prediction tool that uses a **CNN-LSTM
 
 This project fetches stock market data using [`vnstock`](https://github.com/thinh-vu/vnstock).
 
-> Requires **vnstock==3.2.3**
-
 ---
 
 ## 🚀 How to Run
