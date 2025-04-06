@@ -3,7 +3,7 @@
 This project is an AI-powered stock price prediction tool using CNN-LSTM architecture for forecasting and Streamlit for the user interface.
 
 ## Python Version
-This project requires **Python 3.12.9**.
+This project requires **Python 3.11.9**.
 
 ## Stock Data Source
 This project fetches stock market data using [`vnstock`](https://github.com/thinh-vu/vnstock). 
@@ -26,7 +26,7 @@ This will fetch stock data and save it as `data/trained_stock_data.csv`,`data/te
 ### 3. Train the Model
 Before making predictions, train the CNN-LSTM model using historical stock data:
 ```sh
-python src\model_trainer.py
+python src\stock_model_trainer.py
 ```
 This will train the model and save it as `models/cnn_lstm_model.h5`.
 
