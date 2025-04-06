@@ -1,6 +1,6 @@
 # 📊 Stock Price Prediction using CNN-LSTM & Streamlit
 
-This project is an AI-powered stock price prediction tool that uses a **CNN-LSTM** architecture for forecasting and **Streamlit** for a clean, interactive UI.
+This project is an AI-powered stock price prediction tool that uses a **CNN-LSTM** architecture for forecasting and **Streamlit** for a clean, interactive UI. It also integrates **FinBERT**, a financial sentiment analysis model from Hugging Face, to assess market sentiment based on news headlines.
 
 ---
 
@@ -45,7 +45,7 @@ streamlit run app.py
 ```
 This will start the app in your browser, where you can input stock data and get predictions.
 
-## 🧠 Features
+🧠 Features
 ✅ Loads and visualizes stock market data
 
 ✅ Predicts stock prices using CNN-LSTM deep learning
@@ -54,14 +54,11 @@ This will start the app in your browser, where you can input stock data and get 
 
 ✅ Visualizes historical & forecasted trends
 
+✅ Integrates FinBERT for sentiment analysis on financial news
+
+✅ Displays bullish/bearish outlook based on prediction + sentiment
+
 ✅ Saves trained models for future use
-
-## 📌 Future Improvements
-📈 Integrate real-time stock data APIs
-
-🧪 Improve model performance with technical indicators
-
-🔍 Enhance sentiment analysis with live news
 
 ---
 🔗 **Contributions & Feedback**: Feel free to contribute or report any issues!
