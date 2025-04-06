@@ -6,6 +6,7 @@ import pandas as pd
 # Add project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.stock_config import *
+from src.utility import save_dataframe_to_csv
 
 # ------------------ Data Fetching Functions ------------------
 
@@ -121,20 +122,6 @@ def fetch_stock_data(symbols: list, start_date: str, end_date: str) -> pd.DataFr
     """
     all_data = [process_symbol_data(symbol, start_date, end_date) for symbol in symbols]
     return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
-
-# ------------------ Save Utility ------------------
-
-def save_dataframe_to_csv(df: pd.DataFrame, filename: str = "data/stock_data.csv"):
-    """
-    Save DataFrame to a CSV file.
-    """
-    if df.empty:
-        print("[WARN] No data to save.")
-        return
-
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
-    df.to_csv(filename, index=False)
-    print(f"[SUCCESS] Data saved to: {filename}")
 
 # ------------------ Main Execution ------------------
 

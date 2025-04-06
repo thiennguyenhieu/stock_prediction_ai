@@ -57,14 +57,18 @@ def render_news_table(news_df: pd.DataFrame):
         }.get(row['Sentiment'], "#ffffff")
 
         styled_news.append(
-            f"<tr><td>{idx + 1}</td><td>{row['Headline']}</td><td style='color:{color}'>{row['Sentiment'].title()}</td></tr>"
+            f"<tr>"
+            f"<td>{row['Date']}</td>"
+            f"<td>{row['Headline']}</td>"
+            f"<td style='color:{color}'>{row['Sentiment'].title()}</td>"
+            f"</tr>"
         )
 
     news_table_html = f"""
     <table style='width:100%; border-collapse: collapse;'>
         <thead>
             <tr style='text-align: left;'>
-                <th>#</th>
+                <th>Date</th>
                 <th>Headline</th>
                 <th>Sentiment</th>
             </tr>
