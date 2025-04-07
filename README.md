@@ -39,7 +39,7 @@ You can auto-label raw headlines using keyword-based heuristics or train your ow
 python src/news_model_trainer.py
 ```
 - 📂 Path: `models/phobert-finance/`
-- 📥 Download: [Google Drive](https://drive.google.com/your-link-here)
+- 📥 Download: [Google Drive](https://drive.google.com/drive/folders/1dAHSmN9jCnZig8Xwaf1tD3v1THUuJUkW)
 
 ---
 
@@ -53,7 +53,7 @@ You can train the CNN-LSTM stock model with the following scripts:
 python src/fetch_stock_data.py
 ```
 - 📂 Path: `models/cnn_lstm_model.h5`
-- 📥 Download: [Google Drive](https://drive.google.com/your-link-here)
+- 📥 Download: [Google Drive](https://drive.google.com/drive/folders/1dAHSmN9jCnZig8Xwaf1tD3v1THUuJUkW)
 
 ```sh
 python src/stock_model_trainer.py
