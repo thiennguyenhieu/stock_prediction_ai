@@ -25,6 +25,22 @@ This project fetches stock market data using [`vnstock`](https://github.com/thin
 
 ---
 
+## 📈 Stock Prediction with CNN-LSTM
+
+The app uses a hybrid **CNN-LSTM** deep learning model to forecast future stock prices based on historical data. The model is trained using `vnstock`-sourced data.
+
+You can train the CNN-LSTM stock model with the following scripts:
+
+```sh
+python src/fetch_stock_data.py
+```
+```sh
+python src/stock_model_trainer.py
+```
+- 📂 Path: `models/cnn_lstm_model.h5`
+- 📥 Download: [Google Drive](https://drive.google.com/drive/folders/1dAHSmN9jCnZig8Xwaf1tD3v1THUuJUkW)
+---
+
 ## 🤖 Sentiment Analysis with PhoBERT
 
 The app uses `vinai/phobert-base` (or a fine-tuned version of it) for Vietnamese sentiment analysis on financial news. Headlines are labeled as:
@@ -40,25 +56,6 @@ python src/news_model_trainer.py
 ```
 - 📂 Path: `models/phobert-finance/`
 - 📥 Download: [Google Drive](https://drive.google.com/drive/folders/1dAHSmN9jCnZig8Xwaf1tD3v1THUuJUkW)
-
----
-
-## 📈 Stock Prediction with CNN-LSTM
-
-The app uses a hybrid **CNN-LSTM** deep learning model to forecast future stock prices based on historical data. The model is trained using `vnstock`-sourced data.
-
-You can train the CNN-LSTM stock model with the following scripts:
-
-```sh
-python src/fetch_stock_data.py
-```
-- 📂 Path: `models/cnn_lstm_model.h5`
-- 📥 Download: [Google Drive](https://drive.google.com/drive/folders/1dAHSmN9jCnZig8Xwaf1tD3v1THUuJUkW)
-
-```sh
-python src/stock_model_trainer.py
-```
-This will train the stock model and save it as `models/cnn_lstm_model.h5`.
 
 ---
 

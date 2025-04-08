@@ -107,7 +107,8 @@ def __process_symbol_data(symbol: str, start_date: str, end_date: str) -> pd.Dat
         how='left'
     )
 
-    existing_cols = [col for col in KEEP_COLS if col in df_merged.columns]
+    keep_cols = PRICE_FEATURES + VALUATION_FEATURES
+    existing_cols = [col for col in keep_cols if col in df_merged.columns]
     df_merged = df_merged[existing_cols]
 
     return df_merged
