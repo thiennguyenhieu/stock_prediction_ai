@@ -1,5 +1,10 @@
 import os
 import pandas as pd
+import numpy as np
+
+def compute_trend(close_series, threshold=0.01):
+    pct_change = close_series.pct_change().shift(-1)  # shift(-1) = lookahead
+    return np.where(pct_change > threshold, 1, np.where(pct_change < -threshold, -1, 0))
 
 # Handle millisecond timestamps (if any)
 def convert_if_millis(date_str):

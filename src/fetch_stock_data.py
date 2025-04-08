@@ -3,14 +3,17 @@ import os
 from vnstock import Quote, Listing, Finance
 from datetime import date, timedelta, datetime
 import pandas as pd
+from sklearn.preprocessing import LabelEncoder
+import joblib
+
 # Add project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.stock_config import *
-from src.utility import save_dataframe_to_csv
+from src.utility import  *
 
 # ------------------ Data Fetching Functions ------------------
 
-def fetch_financial_data(symbol: str) -> pd.DataFrame:
+def __fetch_financial_data(symbol: str) -> pd.DataFrame:
     """
     Fetch quarterly financial ratios for a given stock symbol.
     """
@@ -44,7 +47,6 @@ def fetch_historical_data(symbol: str, start_date: str, end_date: str) -> pd.Dat
 
     return df
 
-
 def fetch_historical_data_for_display(symbol: str):
     start_date = (date.today() - timedelta(days=30)).strftime('%Y-%m-%d') # display data in 1 month
     end_date = date.today().strftime('%Y-%m-%d')
@@ -53,7 +55,6 @@ def fetch_historical_data_for_display(symbol: str):
     df[COL_TIME] = pd.to_datetime(df[COL_TIME])  # ensure time is datetime
 
     return df
-
 
 def fetch_prediction_data_for_display(symbol: str, start_date: str, forecast_interval: int) -> pd.DataFrame:
     """
@@ -77,7 +78,6 @@ def fetch_prediction_data_for_display(symbol: str, start_date: str, forecast_int
 
     return df_pred
 
-
 def fetch_all_symbols () -> pd.DataFrame:
     df = Listing().symbols_by_exchange()
     keep_cols = [COL_SYMBOL, COL_EXCHANGE, COL_ORGAN_NAME]
@@ -85,8 +85,7 @@ def fetch_all_symbols () -> pd.DataFrame:
     
     return df
 
-
-def process_symbol_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
+def __process_symbol_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
     """
     Fetch and merge historical and financial data for a single symbol.
     """
@@ -97,7 +96,7 @@ def process_symbol_data(symbol: str, start_date: str, end_date: str) -> pd.DataF
         print(f"[WARN] No price data found for {symbol}")
         return pd.DataFrame()
 
-    df_financial = fetch_financial_data(symbol)
+    df_financial = __fetch_financial_data(symbol)
     if df_financial.empty:
         print(f"[WARN] No financial data for {symbol}")
         return pd.DataFrame()
@@ -109,19 +108,50 @@ def process_symbol_data(symbol: str, start_date: str, end_date: str) -> pd.DataF
     )
 
     existing_cols = [col for col in KEEP_COLS if col in df_merged.columns]
-    df_filtered = df_merged[existing_cols]
+    df_merged = df_merged[existing_cols]
 
-    # Filter out rows with missing ROE
-    df_filtered = df_filtered[~df_filtered[COL_ROE].replace(r'^\s*$', pd.NA, regex=True).isna()]
+    return df_merged
 
-    return df_filtered
-
-def fetch_stock_data(symbols: list, start_date: str, end_date: str) -> pd.DataFrame:
+def __fetch_stock_data(symbols: list, start_date: str, end_date: str) -> pd.DataFrame:
     """
     Process a list of stock symbols and combine their financial + price data.
     """
-    all_data = [process_symbol_data(symbol, start_date, end_date) for symbol in symbols]
-    return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
+    list_all_data = [__process_symbol_data(symbol, start_date, end_date) for symbol in symbols]
+    df_all_data = pd.concat(list_all_data, ignore_index=True) if list_all_data else pd.DataFrame()
+    
+    # Adding market index data to the stock dataset
+    df_index_data = fetch_historical_data('VNINDEX', start_date, end_date)
+    df_index_data = df_index_data.drop(columns=[COL_SYMBOL])
+    df_index_data = df_index_data.drop(columns=[COL_YEAR_REPORT])
+    df_index_data = df_index_data.drop(columns=[COL_QUARTER_REPORT])
+    df_index_data = df_index_data.rename(columns={
+        COL_OPEN: COL_INDEX_OPEN,
+        COL_HIGH: COL_INDEX_HIGH,
+        COL_LOW: COL_INDEX_LOW,
+        COL_CLOSE: COL_INDEX_CLOSE,
+        COL_VOLUME: COL_INDEX_VOLUME
+    })
+    # Create index % change feature
+    df_index_data[COL_INDEX_PCT_CHANGE] = df_index_data[COL_INDEX_CLOSE].pct_change()
+
+    # Make sure time is in datetime format
+    df_all_data[COL_TIME] = pd.to_datetime(df_all_data[COL_TIME])
+    df_index_data[COL_TIME] = pd.to_datetime(df_index_data[COL_TIME])
+    
+    df_merged_data = pd.merge(df_all_data, df_index_data, on=COL_TIME, how='left')
+    
+    # Filter out rows with missing ROE
+    df_merged_data = df_merged_data[~df_merged_data[COL_ROE].replace(r'^\s*$', pd.NA, regex=True).isna()]
+    
+    # Sort by symbol and time (symbol will be a string, not one-hot)
+    df_merged_data = df_merged_data.sort_values(by=[COL_SYMBOL, COL_TIME]).reset_index(drop=True)
+
+    # Label encode the 'symbol' column for embedding
+    label_encoder = LabelEncoder()
+    df_merged_data[COL_SYMBOL] = label_encoder.fit_transform(df_merged_data[COL_SYMBOL])
+    joblib.dump(label_encoder, "data/symbol_encoder.pkl")
+
+    return df_merged_data
 
 # ------------------ Main Execution ------------------
 
@@ -134,7 +164,7 @@ def main():
     end_date = date.today().strftime('%Y-%m-%d')
 
     print(f"[INFO] Fetching data for group: {symbol_group} ({len(symbols)} symbols)")
-    stock_data = fetch_stock_data(symbols, start_date, end_date)
+    stock_data = __fetch_stock_data(symbols, start_date, end_date)
 
     save_dataframe_to_csv(stock_data, filename="data/stock_data.csv")
 
