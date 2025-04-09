@@ -1,10 +1,12 @@
 import numpy as np
 import pandas as pd
+import os
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Conv1D, MaxPooling1D, LSTM, Dense, Dropout
+import matplotlib.pyplot as plt
 
 INPUT_SEQ_LEN = 30
 EPOCHS = 50
@@ -33,6 +35,18 @@ def build_cnn_lstm_model(input_shape, output_dim):
     model.compile(optimizer='adam', loss='mse', metrics=['mae'])
     return model
 
+# Sample line plots (first N samples)
+def plot_predictions(y_true, y_pred, label, n=100):
+    plt.figure(figsize=(12, 6))
+    plt.plot(y_true[:n], label=f"True {label}", linewidth=2)
+    plt.plot(y_pred[:n], label=f"Predicted {label}", linestyle="--")
+    plt.title(f"{label} – True vs Predicted")
+    plt.xlabel("Sample Index")
+    plt.ylabel(label)
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
 # --- Main ---
 def main():
     # Load your data
@@ -57,20 +71,14 @@ def main():
     predictions_inv = scaler_y.inverse_transform(predictions)
     y_val_inv = scaler_y.inverse_transform(y_val)
 
-    # Evaluation
-    print("\n--- Sample Predictions ---")
-    for i in range(5):
-        print(f"\nSample #{i+1}")
-        for j, col in enumerate(TARGET_COLS):
-            print(f"{col} | True: {y_val_inv[i][j]:,.2f} | Predicted: {predictions_inv[i][j]:,.2f}")
-
-    print("\n--- MAE by Target ---")
+    # Plot for each target column
     for i, col in enumerate(TARGET_COLS):
+        print(f"\n--- MAE for {col} ---")
         mae = mean_absolute_error(y_val_inv[:, i], predictions_inv[:, i])
         print(f"{col}: {mae:.4f}")
+        plot_predictions(y_val_inv[:, i], predictions_inv[:, i], label=col, n=100)
 
     # Save model
-    import os
     os.makedirs("model", exist_ok=True)
     model.save("model/cnn_lstm_stock_model.h5")
     print("\nModel saved to model/cnn_lstm_stock_model.h5")
