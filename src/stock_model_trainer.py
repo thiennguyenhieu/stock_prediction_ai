@@ -1,76 +1,79 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_absolute_error
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Conv1D, MaxPooling1D, Dropout, LSTM, Dense
-from tensorflow.keras.optimizers import Adam
-from stock_config import PRICE_FEATURES, VALUATION_FEATURES, COL_TIME, COL_SYMBOL
+from tensorflow.keras.layers import Input, Conv1D, MaxPooling1D, LSTM, Dense, Dropout
 
-def preprocess_stock_data(csv_path, time_steps=30):
-    ALL_FEATURES = PRICE_FEATURES + VALUATION_FEATURES
+INPUT_SEQ_LEN = 30
+EPOCHS = 50
+BATCH_SIZE = 32
 
-    df = pd.read_csv(csv_path)
-    df[COL_TIME] = pd.to_datetime(df[COL_TIME])
-    df = df.sort_values(by=COL_TIME)
-    df = df[[COL_TIME, COL_SYMBOL] + ALL_FEATURES]
-    df = df.fillna(method='ffill').dropna()
+# --- Create Sequences ---
+def create_sequences(data, input_seq_len, feature_cols, target_cols):
+    X, y = [], []
+    for i in range(len(data) - input_seq_len):
+        x_seq = data.iloc[i:i+input_seq_len][feature_cols].values
+        y_vals = data.iloc[i+input_seq_len][target_cols].values
+        X.append(x_seq)
+        y.append(y_vals)
+    return np.array(X), np.array(y)
 
-    scaler = MinMaxScaler()
-    scaled_values = scaler.fit_transform(df[ALL_FEATURES])
-    scaled_df = pd.DataFrame(scaled_values, columns=ALL_FEATURES)
-
-    def create_sequences(data, time_steps):
-        X, y_price, y_valuation = [], [], []
-        for i in range(time_steps, len(data)):
-            X.append(data[i-time_steps:i])
-            y_price.append(data[i][0:len(PRICE_FEATURES)])
-            y_valuation.append(data[i][len(PRICE_FEATURES):])
-        return np.array(X), np.array(y_price), np.array(y_valuation)
-
-    X, y_price, y_valuation = create_sequences(scaled_df.values, time_steps)
-    return X, y_price, y_valuation, scaler, PRICE_FEATURES, VALUATION_FEATURES
-
-def build_and_train_model(csv_path, time_steps=30, epochs=10, batch_size=32):
-    X, y_price, y_valuation, scaler, PRICE_FEATURES, VALUATION_FEATURES = preprocess_stock_data(csv_path, time_steps)
-
-    X_train, X_val, y_price_train, y_price_val, y_val_train, y_val_val = train_test_split(
-        X, y_price, y_valuation, test_size=0.2, random_state=42
-    )
-
-    input_layer = Input(shape=(time_steps, len(PRICE_FEATURES) + len(VALUATION_FEATURES)))
-    x = Conv1D(filters=64, kernel_size=3, activation='relu')(input_layer)
+# --- Build Model ---
+def build_cnn_lstm_model(input_shape, output_dim):
+    inputs = Input(shape=input_shape)
+    x = Conv1D(64, 3, activation='relu')(inputs)
     x = MaxPooling1D(pool_size=2)(x)
-    x = Dropout(0.2)(x)
     x = LSTM(64, return_sequences=False)(x)
     x = Dropout(0.2)(x)
-    shared = Dense(64, activation='relu')(x)
-    price_output = Dense(len(PRICE_FEATURES), name='price_output')(shared)
-    valuation_output = Dense(len(VALUATION_FEATURES), name='valuation_output')(shared)
+    x = Dense(64, activation='relu')(x)
+    outputs = Dense(output_dim)(x)
+    model = Model(inputs, outputs)
+    model.compile(optimizer='adam', loss='mse', metrics=['mae'])
+    return model
 
-    model = Model(inputs=input_layer, outputs=[price_output, valuation_output])
-    model.compile(
-        optimizer=Adam(learning_rate=0.001),
-        loss={
-            "price_output": "mse",
-            "valuation_output": "mse"
-        },
-        metrics={
-            "price_output": "mae",
-            "valuation_output": "mae"
-        }
-    )
+# --- Main ---
+def main():
+    # Load your data
+    df = pd.read_csv("data/stock_data.csv")
+    
+    # Scaling
+    scaler_X = MinMaxScaler()
+    scaler_y = MinMaxScaler()
+    df[INPUT_FEATURES] = scaler_X.fit_transform(df[INPUT_FEATURES])
+    df[TARGET_COLS] = scaler_y.fit_transform(df[TARGET_COLS])
 
-    history = model.fit(
-        X_train,
-        {"price_output": y_price_train, "valuation_output": y_val_train},
-        validation_data=(X_val, {"price_output": y_price_val, "valuation_output": y_val_val}),
-        epochs=epochs,
-        batch_size=batch_size
-    )
+    # Create sequences
+    X, y = create_sequences(df, INPUT_SEQ_LEN, INPUT_FEATURES, TARGET_COLS)
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, shuffle=False)
 
-    return model, history, scaler
+    # Train model
+    model = build_cnn_lstm_model(input_shape=(INPUT_SEQ_LEN, len(INPUT_FEATURES)), output_dim=len(TARGET_COLS))
+    model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=EPOCHS, batch_size=BATCH_SIZE)
+
+    # Predict
+    predictions = model.predict(X_val)
+    predictions_inv = scaler_y.inverse_transform(predictions)
+    y_val_inv = scaler_y.inverse_transform(y_val)
+
+    # Evaluation
+    print("\n--- Sample Predictions ---")
+    for i in range(5):
+        print(f"\nSample #{i+1}")
+        for j, col in enumerate(TARGET_COLS):
+            print(f"{col} | True: {y_val_inv[i][j]:,.2f} | Predicted: {predictions_inv[i][j]:,.2f}")
+
+    print("\n--- MAE by Target ---")
+    for i, col in enumerate(TARGET_COLS):
+        mae = mean_absolute_error(y_val_inv[:, i], predictions_inv[:, i])
+        print(f"{col}: {mae:.4f}")
+
+    # Save model
+    import os
+    os.makedirs("model", exist_ok=True)
+    model.save("model/cnn_lstm_stock_model.h5")
+    print("\nModel saved to model/cnn_lstm_stock_model.h5")
 
 if __name__ == "__main__":
-    csv_path = "data\stock_data.csv"
-    model, history, scaler = build_and_train_model(csv_path, time_steps=30, epochs=10, batch_size=32)
+    main()
