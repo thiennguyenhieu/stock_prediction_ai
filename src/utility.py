@@ -27,22 +27,7 @@ def pb_valuation(bvps, target_pb=1.46):
     """
     return bvps * target_pb
 
-def graham_simplified_valuation(eps, g=10):
-    """
-    Simplified Graham formula valuation.
-    
-    V = EPS × (7 + 1.5g)
-    
-    Parameters:
-        eps (float): Earnings per share
-        g (float): Growth rate (e.g., 10 for 10%)
-        
-    Returns:
-        float: Intrinsic value
-    """
-    return eps * (7 + 1.5 * g)
-
-def graham_full_valuation(eps, g=10, y=6.5):
+def graham_valuation(eps, g=10, y=6.5):
     """
     Full Graham formula valuation.
     
