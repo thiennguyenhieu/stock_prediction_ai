@@ -71,8 +71,13 @@ def predict_future_trend(raw_df: pd.DataFrame, forecast_steps: int = 5, debug: b
             print("Scaled:", y_scaled)
             print("Decoded:", y)
 
-        # Maintain sequence length (optionally update with prediction here if using autoregressive)
+        # Update sequence autoregressively using prediction
         next_input = sequence[-1].copy()
+        for j, col in enumerate(target_cols):
+            if col in input_features:
+                col_idx = input_features.index(col)
+                next_input[col_idx] = y_scaled[0, j]  # insert scaled prediction into input
+
         sequence = np.vstack([sequence[1:], next_input])
 
     # --- Format result ---
