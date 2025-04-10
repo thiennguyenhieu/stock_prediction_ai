@@ -15,8 +15,9 @@ from tensorflow.keras.callbacks import EarlyStopping
 # Add project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.stock_config import *
+from src.feature_engineering import add_technical_indicators
 
-INPUT_SEQ_LEN = 30
+INPUT_SEQ_LEN = 60
 EPOCHS = 50
 BATCH_SIZE = 32
 
@@ -59,51 +60,51 @@ def plot_predictions(y_true, y_pred, label, n=100):
 def main():
     df = pd.read_csv("data/stock_data.csv")
 
-    # Remove COL_TIME from input features
-    input_features = [col for col in INPUT_FEATURES if col != COL_TIME]
-
     # Add time-based features
     df[COL_TIME] = pd.to_datetime(df[COL_TIME])
     df[COL_MONTH] = df[COL_TIME].dt.month
     df[COL_QUARTER] = df[COL_TIME].dt.quarter
     df[COL_DAYOFWEEK] = df[COL_TIME].dt.dayofweek
     df[COL_TIME_ORDINAL] = df[COL_TIME].map(pd.Timestamp.toordinal)
-    input_features += [COL_MONTH, COL_QUARTER, COL_DAYOFWEEK, COL_TIME_ORDINAL]
+
+    df = add_technical_indicators(df)
 
     # Fill or drop missing values
     df[COL_DIVIDEND_YIELD].fillna(0, inplace=True)
     df[COL_INDEX_PCT_CHANGE].fillna(method='ffill', inplace=True)
 
-    # Drop rows with any remaining NaNs
-    df = df.dropna(subset=input_features + TARGET_COLS)
+    # Drop rows with missing values
+    df = df.dropna(subset=INPUT_FEATURES)
 
     # Check for NaNs before scaling
-    if df[input_features + TARGET_COLS].isnull().values.any():
+    if df[INPUT_FEATURES].isnull().values.any():
         raise ValueError("🚨 Data contains NaNs. Please clean the dataset before training.")
 
-    # 1. Scale input features
-    scaler_X = MinMaxScaler()
-    df[input_features] = scaler_X.fit_transform(df[input_features])
+    print("✅ TARGET_COLS:", TARGET_COLS)
+    print("✅ Input features:", INPUT_FEATURES)
 
-    # 2. Scale target columns — ⚠️ this part is critical
+    # Scale input features
+    scaler_X = MinMaxScaler()
     scaler_y = MinMaxScaler()
-    scaler_y.fit(df[TARGET_COLS].values)               # ✅ Fit on original
-    df[TARGET_COLS] = scaler_y.transform(df[TARGET_COLS].values)  # ✅ Then transform
+    y_orig = df[TARGET_COLS].values.copy()  # 👈 preserve original y
+    df[INPUT_FEATURES] = scaler_X.fit_transform(df[INPUT_FEATURES])
+    scaler_y.fit(y_orig)                    # 👈 fit on original unscaled data
+    df[TARGET_COLS] = scaler_y.transform(y_orig)  # 👈 then transform
 
     # Create sequences
-    X, y = create_sequences(df, INPUT_SEQ_LEN, input_features, TARGET_COLS)
+    X, y = create_sequences(df, INPUT_SEQ_LEN, INPUT_FEATURES, TARGET_COLS)
     X_train, X_val, y_train, y_val = train_test_split(
         X, y, test_size=0.2, shuffle=False, random_state=42
     )
 
-    # Convert to float32 to avoid TensorFlow dtype issues
+    # Convert to float32
     X_train = X_train.astype(np.float32)
     X_val = X_val.astype(np.float32)
     y_train = y_train.astype(np.float32)
     y_val = y_val.astype(np.float32)
 
-    # Train model
-    model = build_cnn_lstm_model(input_shape=(INPUT_SEQ_LEN, len(input_features)), output_dim=len(TARGET_COLS))
+    # Build and train model
+    model = build_cnn_lstm_model(input_shape=(INPUT_SEQ_LEN, len(INPUT_FEATURES)), output_dim=len(TARGET_COLS))
     es = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
     model.fit(X_train, y_train, validation_data=(X_val, y_val),
               epochs=EPOCHS, batch_size=BATCH_SIZE, callbacks=[es])
@@ -113,7 +114,7 @@ def main():
     predictions_inv = scaler_y.inverse_transform(predictions)
     y_val_inv = scaler_y.inverse_transform(y_val)
 
-    # Plot predictions
+    # Plot and report MAE
     for i, col in enumerate(TARGET_COLS):
         print(f"\n--- MAE for {col} ---")
         mae = mean_absolute_error(y_val_inv[:, i], predictions_inv[:, i])
@@ -129,7 +130,7 @@ def main():
     joblib.dump(scaler_y, 'models/cnn_lstm_stock_model/scaler_y.pkl')
     with open("models/cnn_lstm_stock_model/metadata.json", "w") as f:
         json.dump({
-            "input_features": input_features,
+            "input_features": INPUT_FEATURES,
             "target_cols": TARGET_COLS,
             "input_seq_len": INPUT_SEQ_LEN
         }, f)

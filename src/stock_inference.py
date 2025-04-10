@@ -6,6 +6,7 @@ import pandas as pd
 from tensorflow.keras.models import load_model
 
 from src.stock_config import *
+from src.feature_engineering import add_technical_indicators
 
 # --- Constants ---
 MODEL_DIR = "models/cnn_lstm_stock_model"
@@ -26,13 +27,20 @@ def predict_future_trend(raw_df: pd.DataFrame, forecast_steps: int = 5, debug: b
     target_cols = metadata["target_cols"]
     seq_len = metadata["input_seq_len"]
 
-    # --- Time-based feature engineering ---
+    # --- Time-based + technical feature engineering ---
     if COL_TIME in raw_df.columns:
         raw_df[COL_TIME] = pd.to_datetime(raw_df[COL_TIME])
         raw_df[COL_MONTH] = raw_df[COL_TIME].dt.month
         raw_df[COL_QUARTER] = raw_df[COL_TIME].dt.quarter
         raw_df[COL_DAYOFWEEK] = raw_df[COL_TIME].dt.dayofweek
         raw_df[COL_TIME_ORDINAL] = raw_df[COL_TIME].map(pd.Timestamp.toordinal)
+
+    raw_df = add_technical_indicators(raw_df)
+
+    # --- Validate input features ---
+    missing = [f for f in input_features if f not in raw_df.columns]
+    if missing:
+        raise ValueError(f"Missing required features: {missing}")
 
     raw_df = raw_df.dropna()
     if len(raw_df) < seq_len:
@@ -63,7 +71,7 @@ def predict_future_trend(raw_df: pd.DataFrame, forecast_steps: int = 5, debug: b
             print("Scaled:", y_scaled)
             print("Decoded:", y)
 
-        # Maintain sequence length
+        # Maintain sequence length (optionally update with prediction here if using autoregressive)
         next_input = sequence[-1].copy()
         sequence = np.vstack([sequence[1:], next_input])
 

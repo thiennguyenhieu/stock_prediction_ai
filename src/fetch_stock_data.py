@@ -60,7 +60,7 @@ def __process_symbol_data(symbol: str, start_date: str, end_date: str) -> pd.Dat
         return pd.DataFrame()
 
     df = pd.merge(df_price, df_fin, on=[COL_YEAR_REPORT, COL_QUARTER_REPORT, COL_SYMBOL], how='left')
-    existing = [col for col in INPUT_FEATURES if col in df.columns]
+    existing = [col for col in KEEP_COLS if col in df.columns]
     df = df[existing]
 
     df = __merge_with_index_data(df, start_date, end_date)

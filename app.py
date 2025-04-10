@@ -9,7 +9,6 @@ from src.fetch_news_data import fetch_news_with_sentiment
 
 valid_symbols_with_info = fetch_all_symbols() # Return [symbol, exchange, organ name]
 valid_symbols = valid_symbols_with_info.iloc[:, 0].tolist()
-LOOKBACK_DAYS = {"Last 7 Days": 7, "Last 30 Days": 30, "Last 60 Days": 60}
 FORECAST_DAYS = {"7 Days": 7, "30 Days": 30, "60 Days": 60}
 
 
@@ -105,7 +104,6 @@ st.title("📈 Stock Predictor App")
 with st.sidebar:
     st.header("📊 Stock Settings")
     symbol = st.text_input("Enter Stock Symbol (e.g., ACB)", value="ACB").upper()
-    lookback_label = st.selectbox("Lookback Interval", list(LOOKBACK_DAYS.keys()), index=0)
     forecast_label = st.selectbox("Forecast Interval", list(FORECAST_DAYS.keys()), index=0)
     predict_clicked = st.button("Predict")
 
@@ -120,9 +118,8 @@ if predict_clicked:
     else:
         # --- Data Fetching ---
         today = date.today()
-        lookback_days = LOOKBACK_DAYS[lookback_label]
         forecast_days = FORECAST_DAYS[forecast_label]
-        predict_start_date = (today - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+        predict_start_date = today.strftime("%Y-%m-%d")
 
         df_real = fetch_historical_data_for_display(symbol)
         df_pred = fetch_prediction_data_for_display(symbol, predict_start_date, forecast_days)
