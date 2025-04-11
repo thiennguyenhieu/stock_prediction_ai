@@ -1,6 +1,6 @@
 # 📊 Stock Price Prediction using CNN-LSTM & Streamlit
 
-This project is an AI-powered stock price prediction tool that uses a **CNN-LSTM** architecture for forecasting and **Streamlit** for a clean, interactive UI. It also integrates **PhoBERT**, a pretrained Vietnamese news sentiment analysis model from Hugging Face, to assess market sentiment based on news headlines.
+This project is an AI-powered stock price prediction tool that uses a **CNN-LSTM** architecture for forecasting and **Streamlit** for a clean, interactive UI. It is designed to help visualize historical stock data and predict future trends using deep learning.
 
 ---
 
@@ -13,6 +13,7 @@ This project is an AI-powered stock price prediction tool that uses a **CNN-LSTM
 ## ⚙️ Installation
 
 Install all dependencies using:
+
 ```sh
 pip install -r requirements.txt
 ```
@@ -27,62 +28,56 @@ This project fetches stock market data using [`vnstock`](https://github.com/thin
 
 ## 📈 Stock Prediction with CNN-LSTM
 
-The app uses a hybrid **CNN-LSTM** deep learning model to forecast future stock prices based on historical data. The model is trained using `vnstock`-sourced data.
+The app uses a hybrid **CNN-LSTM** deep learning model to forecast future stock prices based on historical data.
 
-You can train the CNN-LSTM stock model with the following scripts:
+You can train the model using the following scripts:
 
 ```sh
+python src/encode_symbols.py
 python src/fetch_stock_data.py
-```
-```sh
 python src/stock_model_trainer.py
 ```
-- 📂 Path: `models/cnn_lstm_model.h5`
-- 📥 Download: [Google Drive](https://drive.google.com/drive/folders/1dAHSmN9jCnZig8Xwaf1tD3v1THUuJUkW)
----
 
-## 🤖 Sentiment Analysis with PhoBERT
-
-The app uses `vinai/phobert-base` (or a fine-tuned version of it) for Vietnamese sentiment analysis on financial news. Headlines are labeled as:
-
-- `positive`
-- `neutral`
-- `negative`
-
-You can auto-label raw headlines using keyword-based heuristics or train your own classifier with the included training script:
-
-```sh
-python src/news_model_trainer.py
+> 🔒 **Model Location**:  
+> The trained model and scalers are saved in the local folder:
 ```
-- 📂 Path: `models/phobert-finance/`
-- 📥 Download: [Google Drive](https://drive.google.com/drive/folders/1dAHSmN9jCnZig8Xwaf1tD3v1THUuJUkW)
+models/cnn_lstm_stock_model/
+```
+This includes:
+- `cnn_lstm_stock_model.keras`
+- `scaler_X.pkl`
+- `scaler_y.pkl`
+- `metadata.json`
 
 ---
 
 ## 🚀 Run the App
 
-Launch the interactive dashboard with:
+Launch the interactive dashboard:
+
 ```sh
 streamlit run app.py
 ```
-This will open the app in your browser where you can explore data, predictions, and sentiment.
+
+The app will open in your default browser where you can:
+- Select stock symbols
+- Forecast stock prices
+- View valuation based on Graham, P/E, and P/B methods
 
 ---
 
 ### 🧠 Features
-✅ Loads and visualizes stock market data
 
-✅ Predicts stock prices using CNN-LSTM deep learning
-
-✅ Provides an interactive UI with Streamlit
-
-✅ Visualizes historical & forecasted trends
-
-✅ Integrates PhoBERT for sentiment analysis on financial news
-
-✅ Displays bullish/bearish outlook based on prediction + sentiment
-
-✅ Saves trained models for future use
+✅ Loads and visualizes stock market data  
+✅ Predicts stock prices using CNN-LSTM  
+✅ Calculates intrinsic value using Graham, P/E, and P/B  
+✅ Interactive interface built with Streamlit  
+✅ Historical vs predicted chart visualization  
+✅ Local model management (no cloud dependency)  
+✅ Clean and lightweight design  
 
 ---
-🔗 **Contributions & Feedback**: Feel free to contribute or report any issues!
+
+## 🔗 Contributions & Feedback
+
+Feel free to submit pull requests or report issues!

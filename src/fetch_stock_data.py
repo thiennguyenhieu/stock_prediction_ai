@@ -1,8 +1,11 @@
 import sys
 import os
 import joblib
+import glob
 import pandas as pd
+import json
 from datetime import date, timedelta
+import time
 from sklearn.preprocessing import LabelEncoder
 from vnstock import Quote, Listing, Finance
 
@@ -11,6 +14,11 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.stock_config import *
 from src.utility import save_dataframe_to_csv
 from src.stock_inference import predict_future_trend
+from src.feature_engineering import add_technical_indicators
+
+# --- Constants ---
+START_DATE = "2021-01-01"
+END_DATE = "2025-04-13"
 
 # --- Financial & Price Data ---
 def __fetch_financial_data(symbol: str) -> pd.DataFrame:
@@ -51,7 +59,6 @@ def __merge_with_index_data(df: pd.DataFrame, start_date: str, end_date: str) ->
 
 # --- Data Preprocessor ---
 def __process_symbol_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
-    print(f"[INFO] Processing {symbol}")
     df_price = fetch_historical_data(symbol, start_date, end_date)
     df_fin = __fetch_financial_data(symbol)
 
@@ -66,16 +73,39 @@ def __process_symbol_data(symbol: str, start_date: str, end_date: str) -> pd.Dat
     df = __merge_with_index_data(df, start_date, end_date)
     return df
 
-def __fetch_stock_data(symbols: list, start_date: str, end_date: str) -> pd.DataFrame:
-    df_all = pd.concat([__process_symbol_data(sym, start_date, end_date) for sym in symbols], ignore_index=True)
-    df_all[COL_TIME] = pd.to_datetime(df_all[COL_TIME])
-    df_all = df_all[~df_all[COL_ROE].replace(r'^\s*$', pd.NA, regex=True).isna()]
-    df_all = df_all.sort_values([COL_SYMBOL, COL_TIME]).reset_index(drop=True)
+def __fetch_stock_data(symbols: list, start_date: str, end_date: str, delay_sec: float = 1.0) -> pd.DataFrame:
+    all_data = []
 
-    # Encode symbol
-    encoder = LabelEncoder()
-    df_all[COL_SYMBOL] = encoder.fit_transform(df_all[COL_SYMBOL])
-    joblib.dump(encoder, "data/symbol_encoder.pkl")
+    for i, sym in enumerate(symbols):
+        try:
+            print(f"[{i + 1}/{len(symbols)}] Fetching data for: {sym}")
+            df = __process_symbol_data(sym, start_date, end_date)
+            all_data.append(df)
+            time.sleep(delay_sec)
+        except Exception as e:
+            print(f"Failed to fetch {sym}: {e}")
+            time.sleep(delay_sec)
+            continue
+
+    if not all_data:
+        raise ValueError("No stock data was fetched.")
+
+    df_all = pd.concat(all_data, ignore_index=True)
+
+    df_all = df_all.sort_values([COL_SYMBOL, COL_TIME]).reset_index(drop=True)
+    df_all[COL_TIME] = pd.to_datetime(df_all[COL_TIME])
+    df_all[COL_MONTH] = df_all[COL_TIME].dt.month
+    df_all[COL_QUARTER] = df_all[COL_TIME].dt.quarter
+    df_all[COL_DAYOFWEEK] = df_all[COL_TIME].dt.dayofweek
+    df_all[COL_TIME_ORDINAL] = df_all[COL_TIME].map(pd.Timestamp.toordinal)
+    df_all.drop(columns=[COL_TIME], inplace=True)
+
+    df_all = df_all[~df_all[COL_VOLUME].replace(r'^\s*$', pd.NA, regex=True).isna() & (df_all[COL_VOLUME] != 0)]
+    df_all = df_all[~df_all[COL_ROE].replace(r'^\s*$', pd.NA, regex=True).isna() & (df_all[COL_ROE] != 0)]
+    df_all = df_all.dropna(subset=STORED_COLS)
+
+    encoder: LabelEncoder = joblib.load("data/symbol_encoder.pkl")
+    df_all[COL_SYMBOL] = encoder.transform(df_all[COL_SYMBOL])
 
     return df_all
 
@@ -87,13 +117,10 @@ def fetch_historical_data_for_display(symbol: str) -> pd.DataFrame:
 
 def fetch_prediction_data_for_display(symbol: str, predict_start_date: str, forecast_interval: int) -> pd.DataFrame:
     encoder = joblib.load("data/symbol_encoder.pkl")
-    # Go back 1 year from prediction start date
     start_date = pd.to_datetime(predict_start_date) - pd.DateOffset(years=1)
     start_date_str = start_date.strftime("%Y-%m-%d")
 
-    # Process symbol data using adjusted start date
     df = __process_symbol_data(symbol, start_date_str, predict_start_date)
-    
     if df.empty: return pd.DataFrame()
 
     df[COL_TIME] = pd.to_datetime(df[COL_TIME])
@@ -126,13 +153,73 @@ def fetch_all_symbols() -> pd.DataFrame:
 
 # --- Entry ---
 def main():
-    group = "VN30"
-    limit = 15
-    symbols = Listing().symbols_by_group(group)[:limit]
-    print(f"[INFO] Fetching data for {group} ({len(symbols)} stocks)")
+    final_output_path = "data/stock_data_final.csv"
+    failed_log = "data/failed_symbols.log"
+    chunk_size = 500
 
-    df = __fetch_stock_data(symbols, start_date="2021-01-01", end_date=date.today().isoformat())
-    save_dataframe_to_csv(df, "data/stock_data.csv")
+    if os.path.exists(final_output_path):
+        df = pd.read_csv(final_output_path)
+        print(f"[INFO] Final dataset already exists at {final_output_path}. Skipping processing.")
+    else:
+        symbols_with_info = fetch_all_symbols()
+        symbols = symbols_with_info.iloc[:, 0].tolist()
+        total_chunks = (len(symbols) + chunk_size - 1) // chunk_size
+
+        existing_chunk_files = glob.glob("data/stock_data_chunk_*.csv")
+        existing_chunk_indices = {
+            int(os.path.basename(f).split("_")[-1].split(".")[0]) for f in existing_chunk_files
+        }
+
+        expected_chunk_indices = set(range(1, total_chunks + 1))
+        missing_chunk_indices = expected_chunk_indices - existing_chunk_indices
+
+        if missing_chunk_indices:
+            print(f"[INFO] Found {len(missing_chunk_indices)} missing chunk(s). Downloading...")
+
+            for chunk_idx in sorted(missing_chunk_indices):
+                output_path = f"data/stock_data_chunk_{chunk_idx}.csv"
+                chunk = symbols[(chunk_idx - 1) * chunk_size: chunk_idx * chunk_size]
+                print(f"[INFO] Fetching chunk {chunk_idx}: {len(chunk)} symbols")
+
+                try:
+                    df_chunk = __fetch_stock_data(
+                        chunk,
+                        start_date=START_DATE,
+                        end_date=END_DATE,
+                        delay_sec=5
+                    )
+                    save_dataframe_to_csv(df_chunk, output_path)
+                    print(f"[INFO] Saved chunk to {output_path}")
+                except Exception as e:
+                    with open(failed_log, "a") as f:
+                        f.write(f"Chunk {chunk_idx} failed: {e}\n")
+                    print(f"[ERROR] Chunk {chunk_idx} failed. Logged.")
+
+        current_chunks = glob.glob("data/stock_data_chunk_*.csv")
+        if len(current_chunks) < total_chunks:
+            print(f"[ERROR] Only found {len(current_chunks)} of {total_chunks} expected chunk files.")
+            print("[HINT] Re-run with force=True to fetch all data from scratch.")
+            return
+
+        print("[INFO] Generating final dataset from chunk files...")
+        df = pd.concat((pd.read_csv(file) for file in sorted(current_chunks)), ignore_index=True)
+
+        nan_cols = df[STORED_COLS].columns[df[STORED_COLS].isnull().any()].tolist()
+        if nan_cols:
+            raise ValueError(f"Data contains NaNs in columns: {nan_cols}")
+
+        save_dataframe_to_csv(df, final_output_path)
+        print(f"[INFO] Final processed data saved to {final_output_path}")
+
+    # Write or overwrite stock data version
+    with open("data/stock_data_version.json", "w") as f:
+        json.dump({
+            "last_updated": date.today().isoformat(),
+            "start_date": START_DATE,
+            "end_date": END_DATE,
+            "total_rows": len(df),
+            "symbols": df[COL_SYMBOL].nunique()
+        }, f)
 
 if __name__ == "__main__":
     main()

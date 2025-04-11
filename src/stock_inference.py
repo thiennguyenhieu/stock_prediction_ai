@@ -44,7 +44,7 @@ def predict_future_trend(raw_df: pd.DataFrame, forecast_steps: int = 5, debug: b
 
     raw_df = raw_df.dropna()
     if len(raw_df) < seq_len:
-        raise ValueError(f"❌ Not enough data to form sequence (need {seq_len}, got {len(raw_df)})")
+        raise ValueError(f"Not enough data to form sequence (need {seq_len}, got {len(raw_df)})")
 
     # --- Scale input features ---
     scaled_df = raw_df.copy()
@@ -54,10 +54,10 @@ def predict_future_trend(raw_df: pd.DataFrame, forecast_steps: int = 5, debug: b
     predictions = []
 
     if debug:
-        print(f"\n📦 Forecasting {forecast_steps} steps")
-        print(f"🎯 Targets: {target_cols}")
-        print(f"🔢 Input shape: {sequence.shape}")
-        print("📊 scaler_y range:", scaler_y.data_min_, "→", scaler_y.data_max_)
+        print(f"\nForecasting {forecast_steps} steps")
+        print(f"Targets: {target_cols}")
+        print(f"Input shape: {sequence.shape}")
+        print("scaler_y range:", scaler_y.data_min_, "→", scaler_y.data_max_)
 
     # --- Forecast loop ---
     for step in range(forecast_steps):
@@ -85,7 +85,7 @@ def predict_future_trend(raw_df: pd.DataFrame, forecast_steps: int = 5, debug: b
     pred_df.index.name = "Step"
 
     if debug:
-        print("\n✅ Final Predictions:")
+        print("\nFinal Predictions:")
         print(pred_df)
 
     return pred_df

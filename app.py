@@ -1,104 +1,27 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import date, timedelta
+from datetime import date
+
 from src.fetch_stock_data import fetch_historical_data_for_display, fetch_prediction_data_for_display, fetch_all_symbols
-from src.fetch_news_data import fetch_news_with_sentiment
+from src.utility import graham_valuation, pe_valuation, pb_valuation
 
 # ------------------ Constants ------------------
 
-valid_symbols_with_info = fetch_all_symbols() # Return [symbol, exchange, organ name]
+valid_symbols_with_info = fetch_all_symbols()  # Return [symbol, exchange, organ name]
 valid_symbols = valid_symbols_with_info.iloc[:, 0].tolist()
 FORECAST_DAYS = {"7 Days": 7, "30 Days": 30, "60 Days": 60}
 
-
 # ------------------ Helper Functions ------------------
-
-def evaluate_trend(actual: float, predicted: float) -> str:
-    if predicted > actual:
-        return "Bullish"
-    elif predicted < actual:
-        return "Bearish"
-    else:
-        return "Neutral"
-
-def analyze_sentiment(news_df: pd.DataFrame) -> str:
-    sentiment_counts = news_df['Sentiment'].value_counts().to_dict()
-    pos = sentiment_counts.get('positive', 0)
-    neg = sentiment_counts.get('negative', 0)
-    neu = sentiment_counts.get('neutral', 0)
-    diff = abs(pos - neg)
-
-    if (pos == 0 and neg == 0) or diff <= 2 or neu > max(pos, neg):
-        return "Neutral"
-    elif pos > neg:
-        return "Bullish"
-    else:
-        return "Bearish"
-
-def summarize_signal(price_trend: str, sentiment_trend: str) -> str:
-    if price_trend == "Bullish" and sentiment_trend == "Bullish":
-        return "🚀 Strong Bullish"
-    elif price_trend == "Bearish" and sentiment_trend == "Bearish":
-        return "🔻 Strong Bearish"
-    elif price_trend != sentiment_trend:
-        return "⚖️ Mixed Signal – Monitor Closely"
-    else:
-        return "ℹ️ Neutral"
-
-def render_news_table(news_df: pd.DataFrame):
-    styled_news = []
-    for idx, row in news_df.iterrows():
-        color = {
-            "positive": "#2196f3",
-            "negative": "#f44336",
-            "neutral": "#9e9e9e"
-        }.get(row['Sentiment'], "#ffffff")
-
-        styled_news.append(
-            f"<tr>"
-            f"<td>{row['Date']}</td>"
-            f"<td>{row['Headline']}</td>"
-            f"<td style='color:{color}'>{row['Sentiment'].title()}</td>"
-            f"</tr>"
-        )
-
-    news_table_html = f"""
-    <table style='width:100%; border-collapse: collapse;'>
-        <thead>
-            <tr style='text-align: left;'>
-                <th>Date</th>
-                <th>Headline</th>
-                <th>Sentiment</th>
-            </tr>
-        </thead>
-        <tbody>
-            {''.join(styled_news)}
-        </tbody>
-    </table>
-    """
-    st.markdown(news_table_html, unsafe_allow_html=True)
-
 def get_stock_info_by_symbol(symbol: str, df) -> tuple:
-    """
-    Get exchange and organ_name based on symbol using column indexes.
-
-    Args:
-        symbol (str): Stock symbol to look up
-        df (pd.DataFrame): DataFrame with [symbol, exchange, organ_name]
-
-    Returns:
-        tuple: (exchange, organ_name) or (None, None) if not found
-    """
     row = df[df.iloc[:, 0] == symbol]
     if not row.empty:
-        exchange = row.iloc[0, 1]      # exchange is column index 1
-        organ_name = row.iloc[0, 2]    # organ_name is column index 2
+        exchange = row.iloc[0, 1]
+        organ_name = row.iloc[0, 2]
         return exchange, organ_name
     return None, None
 
 # ------------------ UI Sidebar ------------------
-
 st.title("📈 Stock Predictor App")
 
 with st.sidebar:
@@ -116,16 +39,13 @@ if predict_clicked:
     if symbol not in valid_symbols:
         st.error(f"Symbol '{symbol}' not found in model data.")
     else:
-        # --- Data Fetching ---
         today = date.today()
         forecast_days = FORECAST_DAYS[forecast_label]
         predict_start_date = today.strftime("%Y-%m-%d")
 
         df_real = fetch_historical_data_for_display(symbol)
         df_pred = fetch_prediction_data_for_display(symbol, predict_start_date, forecast_days)
-        news_df = fetch_news_with_sentiment(symbol)
 
-        # --- Stock information ---
         exchange, organ_name = get_stock_info_by_symbol(symbol, valid_symbols_with_info)
         st.markdown("&nbsp;", unsafe_allow_html=True)
         st.subheader(f"🏢 {symbol} — {organ_name}")
@@ -159,30 +79,15 @@ if predict_clicked:
 
         # --- Evaluation ---
         st.markdown("&nbsp;", unsafe_allow_html=True)
-        st.subheader("📊 Evaluation on Predicted Price")
-        latest_prediction = df_pred.iloc[-1, 1]
-        st.markdown(f"**Latest Predicted Price:** {latest_prediction:.2f}")
+        st.subheader("📊 Valuation Summary")
 
-        # --- News & Sentiment ---
-        st.markdown("&nbsp;", unsafe_allow_html=True)
-        st.subheader("📰 Related News & Sentiment")
-        render_news_table(news_df)
+        eps = df_pred.iloc[-1, 2]
+        bvps = df_pred.iloc[-1, 3]
 
-        # --- Market Summary ---
-        st.markdown("&nbsp;", unsafe_allow_html=True)
-        st.subheader("📋 Market Outlook Summary")
+        graham_value = graham_valuation(eps)
+        pe_value = pe_valuation(eps)
+        pb_value = pb_valuation(bvps)
 
-        latest_actual = df_real.iloc[-1, 1]
-        trend = evaluate_trend(latest_actual, latest_prediction)
-        sentiment_trend = analyze_sentiment(news_df)
-        overall_signal = summarize_signal(trend, sentiment_trend)
-
-        st.info(f"📈 **Prediction Trend:** {trend}")
-        st.info(f"📰 **News Sentiment Trend:** {sentiment_trend}")
-
-        if "Bullish" in overall_signal:
-            st.success(f"✅ **Overall Signal:** {overall_signal}")
-        elif "Bearish" in overall_signal:
-            st.error(f"🔻 **Overall Signal:** {overall_signal}")
-        else:
-            st.warning(f"⚖️ **Overall Signal:** {overall_signal}")
+        st.markdown(f"**Predicted Intrinsic Value (Graham):** {graham_value:.2f} VND")
+        st.markdown(f"**P/E-based Valuation:** {pe_value:.2f} VND")
+        st.markdown(f"**P/B-based Valuation:** {pb_value:.2f} VND")

@@ -1,3 +1,5 @@
 src/__pycache__/
 logs/
-models/
+.vscode/
+.venv/
+data/stock_data_chunk_*.csv
