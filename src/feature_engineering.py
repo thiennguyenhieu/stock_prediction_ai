@@ -7,6 +7,45 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.stock_config import *
 
+def signed_log1p(x):
+    return np.sign(x) * np.log1p(np.abs(x))
+
+def signed_expm1(x):
+    return np.sign(x) * (np.expm1(np.abs(x)))
+
+def add_multi_cycle_fourier_features(df):
+    """
+    Adds Fourier-based sine/cosine features for multiple seasonal cycles:
+    - daily, weekly, quarterly, yearly
+
+    Requirements:
+    - df must contain a datetime column named COL_TIME (or convertible to datetime)
+
+    For each cycle, the following features will be added:
+    - sin_{name}: sine transformation of the time ordinal over the cycle period
+    - cos_{name}: cosine transformation of the time ordinal over the cycle period
+    """
+    df = df.copy()
+
+    # Ensure COL_TIME is datetime and compute ordinal
+    df[COL_TIME] = pd.to_datetime(df[COL_TIME])
+    df[COL_TIME_ORDINAL] = df[COL_TIME].map(pd.Timestamp.toordinal)
+
+    # Define cycles and their periods in days
+    cycles = {
+        "day": 1,
+        "week": 7,
+        "quarter": 91.25,   # Approximation of a financial quarter
+        "year": 365.25      # Includes leap year adjustment
+    }
+
+    # Add sine and cosine features for each cycle
+    for name, period in cycles.items():
+        df[f"sin_{name}"] = np.sin(2 * np.pi * df[COL_TIME_ORDINAL] / period)
+        df[f"cos_{name}"] = np.cos(2 * np.pi * df[COL_TIME_ORDINAL] / period)
+
+    return df
+
 def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 

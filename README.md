@@ -34,21 +34,15 @@ You can train the model using the following scripts:
 
 ```sh
 python src/encode_symbols.py
-python src/fetch_stock_data.py
-python src/stock_model_trainer.py
+python src/fetch_historical_data.py
+python src/train_historical_model.py
 ```
 
 > 🔒 **Model Location**:  
 > The trained model and scalers are saved in the local folder:
 ```
-models/cnn_lstm_stock_model/
+models/cnn_lstm_close_regression/VERSION_TAG
 ```
-This includes:
-- `cnn_lstm_stock_model.keras`
-- `scaler_X.pkl`
-- `scaler_y.pkl`
-- `metadata.json`
-
 ---
 
 ## 🚀 Run the App
@@ -62,7 +56,6 @@ streamlit run app.py
 The app will open in your default browser where you can:
 - Select stock symbols
 - Forecast stock prices
-- View valuation based on Graham, P/E, and P/B methods
 
 ---
 
@@ -70,7 +63,6 @@ The app will open in your default browser where you can:
 
 ✅ Loads and visualizes stock market data  
 ✅ Predicts stock prices using CNN-LSTM  
-✅ Calculates intrinsic value using Graham, P/E, and P/B  
 ✅ Interactive interface built with Streamlit  
 ✅ Historical vs predicted chart visualization  
 ✅ Local model management (no cloud dependency)  

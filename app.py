@@ -1,13 +1,11 @@
 import streamlit as st
-import pandas as pd
 import plotly.graph_objects as go
-from datetime import date
 
-from src.fetch_stock_data import fetch_historical_data_for_display, fetch_prediction_data_for_display, fetch_all_symbols
+from src.fetch_historical_data import fetch_recent_price, fetch_all_symbols
+from src.historical_inference import get_prediction
 from src.utility import graham_valuation, pe_valuation, pb_valuation
 
 # ------------------ Constants ------------------
-
 valid_symbols_with_info = fetch_all_symbols()  # Return [symbol, exchange, organ name]
 valid_symbols = valid_symbols_with_info.iloc[:, 0].tolist()
 FORECAST_DAYS = {"7 Days": 7, "30 Days": 30, "60 Days": 60}
@@ -31,7 +29,6 @@ with st.sidebar:
     predict_clicked = st.button("Predict")
 
 # ------------------ Main Logic ------------------
-
 if not predict_clicked:
     st.info("👈 Please use the sidebar to select stock symbol and forecast options, then click **Predict**.")
 
@@ -39,12 +36,10 @@ if predict_clicked:
     if symbol not in valid_symbols:
         st.error(f"Symbol '{symbol}' not found in model data.")
     else:
-        today = date.today()
         forecast_days = FORECAST_DAYS[forecast_label]
-        predict_start_date = today.strftime("%Y-%m-%d")
 
-        df_real = fetch_historical_data_for_display(symbol)
-        df_pred = fetch_prediction_data_for_display(symbol, predict_start_date, forecast_days)
+        df_real = fetch_recent_price(symbol)
+        df_pred = get_prediction(symbol, forecast_days)
 
         exchange, organ_name = get_stock_info_by_symbol(symbol, valid_symbols_with_info)
         st.markdown("&nbsp;", unsafe_allow_html=True)
@@ -70,6 +65,15 @@ if predict_clicked:
             line=dict(color='orange', dash='dash'),
             hovertemplate='Date: %{x|%Y-%m-%d}<br>Predicted Price: %{y:.2f}<extra></extra>'
         ))
+        fig.add_trace(go.Scatter(
+            x=[df_real.iloc[-1, 0], df_pred.iloc[0, 0]],
+            y=[df_real.iloc[-1, 1], df_pred.iloc[0, 1]],
+            mode='lines',
+            name='',
+            line=dict(color='orange', dash='dash'),
+            hoverinfo='skip',
+            showlegend=False
+        ))
         fig.update_layout(
             xaxis_title='Date', yaxis_title='Close Price',
             legend=dict(x=0, y=1), hovermode='x', template='plotly_white',
@@ -81,8 +85,8 @@ if predict_clicked:
         st.markdown("&nbsp;", unsafe_allow_html=True)
         st.subheader("📊 Valuation Summary")
 
-        eps = df_pred.iloc[-1, 2]
-        bvps = df_pred.iloc[-1, 3]
+        eps = 0
+        bvps = 0
 
         graham_value = graham_valuation(eps)
         pe_value = pe_valuation(eps)
