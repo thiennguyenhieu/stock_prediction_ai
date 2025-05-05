@@ -93,6 +93,5 @@ def predict_close_price_series(raw_df: pd.DataFrame, forecast_steps: int = 5, de
             next_input[idx] = y_close[0, 0]
         sequence = np.vstack([sequence[1:], next_input])
 
-    pred_df = pd.DataFrame(predictions, columns=["forecast_close"])
-    pred_df.index.name = "Step"
+    pred_df = pd.DataFrame(predictions, columns=[COL_CLOSE])
     return pred_df

@@ -93,7 +93,7 @@ def post_process_data(df: pd.DataFrame) -> pd.DataFrame:
 # --- Display Support ---
 def fetch_recent_price(symbol: str) -> pd.DataFrame:
     df = fetch_historical_data(symbol, (date.today() - timedelta(days=30)).isoformat(), date.today().isoformat())
-    return df[[COL_TIME, COL_CLOSE]] if not df.empty else pd.DataFrame()
+    return df[[COL_TIME, COL_VOLUME, COL_CLOSE]] if not df.empty else pd.DataFrame()
 
 # --- Main Orchestration ---
 def main():

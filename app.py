@@ -3,12 +3,13 @@ import plotly.graph_objects as go
 
 from src.fetch_historical_data import fetch_recent_price, fetch_all_symbols
 from src.historical_inference import get_prediction
+from src.stock_config import *
 from src.utility import graham_valuation, pe_valuation, pb_valuation
 
 # ------------------ Constants ------------------
 valid_symbols_with_info = fetch_all_symbols()  # Return [symbol, exchange, organ name]
-valid_symbols = valid_symbols_with_info.iloc[:, 0].tolist()
-FORECAST_DAYS = {"7 Days": 7, "30 Days": 30, "60 Days": 60}
+valid_symbols = valid_symbols_with_info[valid_symbols_with_info.iloc[:, 0].str.len() == 3].iloc[:, 0].tolist()
+FORECAST_DAYS = {"7 Days": 7, "14 Days": 14, "30 Days": 30}
 
 # ------------------ Helper Functions ------------------
 def get_stock_info_by_symbol(symbol: str, df) -> tuple:
@@ -51,34 +52,54 @@ if predict_clicked:
         st.subheader("📉 Price Forecast")
 
         fig = go.Figure()
+
+        # --- Actual Close Price ---
         fig.add_trace(go.Scatter(
-            x=df_real.iloc[:, 0], y=df_real.iloc[:, 1],
+            x=df_real[COL_TIME], y=df_real[COL_CLOSE],
             mode='lines+markers', name='Actual Price',
             marker=dict(symbol='circle', color='blue'),
             line=dict(color='blue'),
-            hovertemplate='Date: %{x|%Y-%m-%d}<br>Actual Price: %{y:.2f}<extra></extra>'
+            hovertemplate='Date: %{x|%Y-%m-%d}<br>Actual Price: %{y:.2f}<extra></extra>',
+            yaxis='y1'
         ))
+
+        # --- Predicted Close Price ---
         fig.add_trace(go.Scatter(
-            x=df_pred.iloc[:, 0], y=df_pred.iloc[:, 1],
+            x=df_pred[COL_TIME], y=df_pred[COL_CLOSE],
             mode='lines+markers', name='Predicted Price',
             marker=dict(symbol='x', color='orange'),
             line=dict(color='orange', dash='dash'),
-            hovertemplate='Date: %{x|%Y-%m-%d}<br>Predicted Price: %{y:.2f}<extra></extra>'
+            hovertemplate='Date: %{x|%Y-%m-%d}<br>Predicted Price: %{y:.2f}<extra></extra>',
+            yaxis='y1'
         ))
+
+        # --- Connector Line ---
         fig.add_trace(go.Scatter(
-            x=[df_real.iloc[-1, 0], df_pred.iloc[0, 0]],
-            y=[df_real.iloc[-1, 1], df_pred.iloc[0, 1]],
-            mode='lines',
-            name='',
-            line=dict(color='orange', dash='dash'),
-            hoverinfo='skip',
-            showlegend=False
+            x=[df_real[COL_TIME].iloc[-1], df_pred[COL_TIME].iloc[0]],
+            y=[df_real[COL_CLOSE].iloc[-1], df_pred[COL_CLOSE].iloc[0]],
+            mode='lines', line=dict(color='orange', dash='dash'),
+            hoverinfo='skip', showlegend=False, yaxis='y1'
         ))
+
+        # --- Volume Bars ---
+        fig.add_trace(go.Bar(
+            x=df_real[COL_TIME], y=df_real[COL_VOLUME],
+            name='Volume', marker_color='rgba(100, 100, 255, 0.3)',
+            yaxis='y2', opacity=0.5
+        ))
+
+        # --- Layout Settings ---
         fig.update_layout(
-            xaxis_title='Date', yaxis_title='Close Price',
-            legend=dict(x=0, y=1), hovermode='x', template='plotly_white',
-            margin=dict(t=10, b=40, l=40, r=10), height=400
+            xaxis_title='Date',
+            yaxis=dict(title='Close Price', side='left'),
+            yaxis2=dict(title='Volume', overlaying='y', side='right', showgrid=False),
+            legend=dict(x=0, y=1),
+            hovermode='x unified',
+            template='plotly_white',
+            margin=dict(t=10, b=40, l=40, r=10),
+            height=450
         )
+
         st.plotly_chart(fig, use_container_width=True)
 
         # --- Evaluation ---
