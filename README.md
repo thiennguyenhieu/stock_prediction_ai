@@ -1,6 +1,6 @@
-# 📊 Stock Price Prediction using CNN-LSTM & Streamlit
+# 📊 Stock Price & Financial Forecasting with CNN-LSTM, LightGBM & Streamlit
 
-This project is an AI-powered stock price prediction tool that uses a **CNN-LSTM** architecture for forecasting and **Streamlit** for a clean, interactive UI. It is designed to help visualize historical stock data and predict future trends using deep learning.
+This project is an AI-powered stock analytics and prediction tool using CNN-LSTM for multi-step Close price forecasting, and LightGBM for predicting fundamental indicators like EPS and BVPS. The tool is deployed through an interactive Streamlit dashboard.
 
 ---
 
@@ -22,30 +22,51 @@ pip install -r requirements.txt
 
 ## 📦 Data Source
 
-This project fetches stock market data using [`vnstock`](https://github.com/thinh-vu/vnstock).
+This project fetches stock market data using [`vnstock`](https://github.com/thinh-vu/vnstock), including:
+- Historical stock prices
+- Financial ratios and reports
 
 ---
 
-## 📈 Stock Prediction with CNN-LSTM
+## 📈 Close Price Prediction (CNN-LSTM)
 
-The app uses a hybrid **CNN-LSTM** deep learning model to forecast future stock prices based on historical data.
+The deep learning model predicts the future Close prices using a hybrid CNN-LSTM architecture with attention mechanisms and multi-step forecasting.
 
-You can train the model using the following scripts:
-
+🔧 Train Model
 ```sh
 python src/encode_symbols.py
 python src/fetch_historical_data.py
 python src/train_historical_model.py
 ```
 
-> 🔒 **Model Location**:  
-> The trained model and scalers are saved in the local folder:
+✅ Outputs:
 ```
-models/cnn_lstm_close_regression/VERSION_TAG
+models/cnn_lstm_close_regression/<VERSION_TAG>/
 ```
 ---
 
-## 🚀 Run the App
+💡 EPS & BVPS Forecasting (LightGBM)
+
+The project includes a financial forecasting module to predict EPS and BVPS using LightGBM regressors trained on quarterly financial reports.
+
+🔧 Train Financial Model
+```sh
+python src/fetch_financial_data.py
+python src/train_financial_model.py
+```
+
+✅ Outputs:
+```
+models/lgbm_eps_bvps/<VERSION_TAG>/
+```
+
+🎯 Model Targets
+- EPS (VND) — Earnings Per Share
+- BVPS (VND) — Book Value Per Share
+
+---
+
+## 🚀 Launch the App
 
 Launch the interactive dashboard:
 
@@ -53,23 +74,28 @@ Launch the interactive dashboard:
 streamlit run app.py
 ```
 
-The app will open in your default browser where you can:
+You can:
 - Select stock symbols
-- Forecast stock prices
+- Forecast stock Close prices
+- Predict EPS and BVPS
+- See derived valuations using:
+    - Graham Formula
+    - P/E-based valuation
+    - P/B-based valuation
 
 ---
 
 ### 🧠 Features
 
-✅ Loads and visualizes stock market data  
-✅ Predicts stock prices using CNN-LSTM  
-✅ Interactive interface built with Streamlit  
-✅ Historical vs predicted chart visualization  
-✅ Local model management (no cloud dependency)  
-✅ Clean and lightweight design  
+✅ CNN-LSTM model for Close price forecasting
+✅ LightGBM for EPS & BVPS prediction
+✅ Multi-step Close prediction with attention
+✅ Valuation analysis using forecasted fundamentals
+✅ Streamlit interface with interactive charts
+✅ Local model management, no cloud dependency
 
 ---
 
 ## 🔗 Contributions & Feedback
-
-Feel free to submit pull requests or report issues!
+Pull requests and feedback are welcome!
+Please report any bugs or issues for improvement.
