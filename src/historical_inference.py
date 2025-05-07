@@ -24,7 +24,7 @@ def load_artifacts():
     return model, scaler_X, scaler_y, metadata
 
 # --- Predict close price series ---
-def get_prediction(symbol: str, interval: int) -> pd.DataFrame:
+def get_close_prediction(symbol: str, interval: int) -> pd.DataFrame:
     start_date = (date.today() - pd.DateOffset(years=1)).strftime("%Y-%m-%d")
     today = date.today().strftime("%Y-%m-%d")
 

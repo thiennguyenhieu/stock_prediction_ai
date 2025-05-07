@@ -2,7 +2,8 @@ import streamlit as st
 import plotly.graph_objects as go
 
 from src.fetch_historical_data import fetch_recent_price, fetch_all_symbols
-from src.historical_inference import get_prediction
+from src.historical_inference import get_close_prediction
+from src.financial_inference import get_eps_bvps_prediction
 from src.stock_config import *
 from src.utility import graham_valuation, pe_valuation, pb_valuation
 
@@ -40,7 +41,7 @@ if predict_clicked:
         forecast_days = FORECAST_DAYS[forecast_label]
 
         df_real = fetch_recent_price(symbol)
-        df_pred = get_prediction(symbol, forecast_days)
+        df_pred = get_close_prediction(symbol, forecast_days)
 
         exchange, organ_name = get_stock_info_by_symbol(symbol, valid_symbols_with_info)
         st.markdown("&nbsp;", unsafe_allow_html=True)
@@ -106,8 +107,9 @@ if predict_clicked:
         st.markdown("&nbsp;", unsafe_allow_html=True)
         st.subheader("📊 Valuation Summary")
 
-        eps = 0
-        bvps = 0
+        pred_series = get_eps_bvps_prediction(symbol)
+        eps = pred_series[COL_EPS]
+        bvps = pred_series[COL_BVPS]
 
         graham_value = graham_valuation(eps)
         pe_value = pe_valuation(eps)

@@ -3,12 +3,11 @@ from vnstock import Listing
 
 SOURCE_DATA = 'VCI'
 
-COL_TICKER = 'ticker'
 COL_EXCHANGE = 'exchange'
 COL_ORGAN_NAME = 'organ_name'
 COL_TIME = 'time'
-COL_MONTH = 'month'
 COL_QUARTER = 'quarter'
+COL_YEAR = 'year'
 COL_TIME_ORDINAL = 'time_ordinal'
 COL_SYMBOL = 'symbol'
 COL_OPEN = 'open'
