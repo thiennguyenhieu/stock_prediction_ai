@@ -45,7 +45,7 @@ models/cnn_lstm_close_regression/<VERSION_TAG>/
 ```
 ---
 
-💡 EPS & BVPS Forecasting (LightGBM)
+## 💡 EPS & BVPS Forecasting (LightGBM)
 
 The project includes a financial forecasting module to predict EPS and BVPS using LightGBM regressors trained on quarterly financial reports.
 
@@ -87,15 +87,15 @@ You can:
 
 ### 🧠 Features
 
-✅ CNN-LSTM model for Close price forecasting
-✅ LightGBM for EPS & BVPS prediction
-✅ Multi-step Close prediction with attention
-✅ Valuation analysis using forecasted fundamentals
-✅ Streamlit interface with interactive charts
-✅ Local model management, no cloud dependency
+- CNN-LSTM model for Close price forecasting
+- LightGBM for EPS & BVPS prediction
+- Multi-step Close prediction with attention
+- Valuation analysis using forecasted fundamentals
+- Streamlit interface with interactive charts
+- Local model management, no cloud dependency
 
 ---
 
 ## 🔗 Contributions & Feedback
-Pull requests and feedback are welcome!
-Please report any bugs or issues for improvement.
+- Pull requests and feedback are welcome!
+- Please report any bugs or issues for improvement.
