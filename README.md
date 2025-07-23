@@ -96,12 +96,6 @@ You can:
 
 ---
 
-### 🧠 Testing app
-
-https://stockpredictionai-ctmhp2wartjkjo6hhsugp6.streamlit.app/
-
----
-
 ## 🔗 Contributions & Feedback
 - Pull requests and feedback are welcome!
 - Please report any bugs or issues for improvement.
