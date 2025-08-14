@@ -12,13 +12,13 @@ from vnstock import Quote
 # Project imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.stock_config import *
+from src.fetch_general_info import fetch_all_symbols
 from src.utility import save_dataframe_to_csv
 from src.feature_engineering import *
 
 # Constants
 START_DATE = "2021-01-01"
-END_DATE = "2025-04-21"
-ENCODER_PATH = "data/symbol_encoder.pkl"
+END_DATE = "2025-08-12"
 FINAL_OUTPUT_PATH = "data/historical_data_final.csv"
 FAILED_LOG_PATH = "data/historical_failed_symbols.log"
 CHUNK_PATH_PATTERN = "data/historical_data_chunk_*.csv"
@@ -26,7 +26,7 @@ CHUNK_PATH_PATTERN = "data/historical_data_chunk_*.csv"
 # --- Data Fetching ---
 def fetch_historical_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
     try:
-        df = Quote(symbol, SOURCE_DATA).history(start=start_date, end=end_date, interval='1D')
+        df = Quote(SOURCE_DATA, symbol).history(start=start_date, end=end_date, interval='1D')
         if df.empty:
             return pd.DataFrame()
         df[COL_TIME] = pd.to_datetime(df[COL_TIME])

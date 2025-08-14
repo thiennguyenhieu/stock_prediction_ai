@@ -6,7 +6,7 @@ from sklearn.preprocessing import LabelEncoder
 
 # Project imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from src.fetch_stock_data import fetch_all_symbols
+from src.fetch_general_info import fetch_all_symbols
 
 def encode_symbols(df: pd.DataFrame, symbol_col: str = None, output_path: str = "data/symbol_encoder.pkl") -> LabelEncoder:
     if symbol_col is None:

@@ -1,7 +1,0 @@
-{
-    "learning_rate": 0.05,
-    "max_depth": 8,
-    "min_child_samples": 10,
-    "n_estimators": 1000,
-    "num_leaves": 31
-}

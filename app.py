@@ -1,16 +1,17 @@
 import streamlit as st
 import plotly.graph_objects as go
+import numpy as np
+import pandas as pd
 
-from src.fetch_historical_data import fetch_recent_price, fetch_all_symbols
-from src.historical_inference import get_close_prediction
-from src.financial_inference import get_eps_bvps_prediction
+from src.fetch_historical_data import fetch_recent_price
+from src.fetch_financial_data import fetch_financial_single_symbol
+from src.fetch_general_info import fetch_all_symbols, fetch_company_overview, fetch_dividend
+from src.historical_inference_v1 import get_close_prediction
 from src.stock_config import *
-from src.utility import graham_valuation, pe_valuation, pb_valuation
 
 # ------------------ Constants ------------------
 valid_symbols_with_info = fetch_all_symbols()  # Return [symbol, exchange, organ name]
 valid_symbols = valid_symbols_with_info[valid_symbols_with_info.iloc[:, 0].str.len() == 3].iloc[:, 0].tolist()
-FORECAST_DAYS = {"7 Days": 7, "14 Days": 14, "30 Days": 30}
 
 # ------------------ Helper Functions ------------------
 def get_stock_info_by_symbol(symbol: str, df) -> tuple:
@@ -21,36 +22,47 @@ def get_stock_info_by_symbol(symbol: str, df) -> tuple:
         return exchange, organ_name
     return None, None
 
-# ------------------ UI Sidebar ------------------
+def highlight_value(val):
+    if val > 0:
+        return 'color: green; font-weight: bold;'
+    elif val < 0:
+        return 'color: red; font-weight: bold;'
+    return ''  # no style for exactly zero
+
+def format_thousands(v):
+    return "" if pd.isna(v) else f"{v:,.0f}"
+
+# ------------------ UI layout ------------------
+st.set_page_config(layout="wide") # set wide layout
+
 st.title("📈 Stock Predictor App")
 
 with st.sidebar:
     st.header("📊 Stock Settings")
     symbol = st.text_input("Enter Stock Symbol (e.g., ACB)", value="ACB").upper()
-    forecast_label = st.selectbox("Forecast Interval", list(FORECAST_DAYS.keys()), index=0)
-    predict_clicked = st.button("Predict")
+    apply_clicked = st.button("Apply")
 
 # ------------------ Main Logic ------------------
-if not predict_clicked:
-    st.info("👈 Please use the sidebar to select stock symbol and forecast options, then click **Predict**.")
+if not apply_clicked:
+    st.info("👈 Please use the sidebar to select stock symbol and forecast options, then click **Apply**.")
 
-if predict_clicked:
+if apply_clicked:
     if symbol not in valid_symbols:
         st.error(f"Symbol '{symbol}' not found in model data.")
     else:
-        forecast_days = FORECAST_DAYS[forecast_label]
-
         df_real = fetch_recent_price(symbol)
-        df_pred = get_close_prediction(symbol, forecast_days)
+        df_pred = get_close_prediction(symbol, 14)
 
         exchange, organ_name = get_stock_info_by_symbol(symbol, valid_symbols_with_info)
+        shares_outstanding, industry = fetch_company_overview(symbol)
         st.markdown("&nbsp;", unsafe_allow_html=True)
-        st.subheader(f"🏢 {symbol} — {organ_name}")
-        st.markdown(f"**Exchange:** {exchange}")
+        st.subheader(f"🏢 {organ_name} ({exchange}: {symbol})")
+        st.markdown(f"**Industry:** {industry}")
+        st.markdown(f"**Shares outstanding:** {shares_outstanding:,}")
 
         # --- Price Forecast Plot ---
         st.markdown("&nbsp;", unsafe_allow_html=True)
-        st.subheader("📉 Price Forecast")
+        st.subheader("📉 Price forecast for the next 14 days")
 
         fig = go.Figure()
 
@@ -103,18 +115,33 @@ if predict_clicked:
 
         st.plotly_chart(fig, use_container_width=True)
 
-        # --- Evaluation ---
+        # --- Dividend ---
         st.markdown("&nbsp;", unsafe_allow_html=True)
-        st.subheader("📊 Valuation Summary")
+        st.subheader("💸 Dividend History")
 
-        pred_series = get_eps_bvps_prediction(symbol)
-        eps = pred_series[COL_EPS]
-        bvps = pred_series[COL_BVPS]
+        df_dividend = fetch_dividend(symbol).head(5).reset_index(drop=True)
+        html = (
+            df_dividend
+            .style
+            .hide(axis="index")
+            .to_html()
+        )
 
-        graham_value = graham_valuation(eps)
-        pe_value = pe_valuation(eps)
-        pb_value = pb_valuation(bvps)
+        st.markdown(html, unsafe_allow_html=True)
 
-        st.markdown(f"**Predicted Intrinsic Value (Graham):** {graham_value:.2f} VND")
-        st.markdown(f"**P/E-based Valuation:** {pe_value:.2f} VND")
-        st.markdown(f"**P/B-based Valuation:** {pb_value:.2f} VND")
+        # --- Financial Report Table --- 
+        st.markdown("&nbsp;", unsafe_allow_html=True)
+        st.subheader("📑 Quarterly Financial Report")
+        
+        df_finance_display = fetch_financial_single_symbol(symbol).head(8).reset_index(drop=True)
+
+        html = (
+            df_finance_display
+            .style
+            .hide(axis="index")
+            .format({COL_ATTRIBUTE: "{:,.0f}", COL_REVENUE: "{:,.0f}"})
+            .applymap(highlight_value, subset=[COL_ATTRIBUTE_YOY])
+            .to_html()
+        )
+
+        st.markdown(html, unsafe_allow_html=True)

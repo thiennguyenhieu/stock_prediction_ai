@@ -1,10 +1,10 @@
-import pandas as pd
-from vnstock import Listing
 
 SOURCE_DATA = 'VCI'
 
 COL_EXCHANGE = 'exchange'
 COL_ORGAN_NAME = 'organ_name'
+COL_ISSUE_SHARE = 'issue_share'
+COL_ICB_NAME = 'icb_name2'
 COL_TIME = 'time'
 COL_QUARTER = 'quarter'
 COL_YEAR = 'year'
@@ -32,6 +32,7 @@ COL_PB = 'P/B'
 COL_PS = 'P/S'
 COL_PCASHFLOW = 'P/Cash Flow'
 COL_EPS = 'EPS (VND)'
+COL_EPS_TTM = 'EPS TTM (VND)'
 COL_BVPS = 'BVPS (VND)'
 COL_FIXED_ASSET_TO_EQUITY = 'Fixed Asset-To-Equity'
 COL_MARKET_CAP = 'Market Capital (Bn. VND)'
@@ -49,8 +50,9 @@ COL_BB_UPPER = 'bb_upper'
 COL_BB_LOWER = 'bb_lower'
 COL_MACD = 'macd'
 COL_MACD_SIGNAL = 'macd_signal'
+COL_REVENUE = 'Revenue (Bn. VND)'
+COL_REVENUE_YOY = 'Revenue YoY (%)'
+COL_ATTRIBUTE = 'Attribute to parent company (Bn. VND)'
+COL_ATTRIBUTE_YOY = 'Attribute to parent company YoY (%)'
 
-# --- Symbol Listing ---
-def fetch_all_symbols() -> pd.DataFrame:
-    return Listing().symbols_by_exchange()[[COL_SYMBOL, COL_EXCHANGE, COL_ORGAN_NAME]]
-
+ENCODER_PATH = "data/symbol_encoder.pkl"

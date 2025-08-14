@@ -1,4 +1,4 @@
-Best Train Forecast MAE: 0.0202
-Best Val Forecast MAE: 0.0217
-Best Train Dir Acc: 0.2622
-Best Val Dir Acc: 0.4428
+Best Train Forecast MAE: 0.0221
+Best Val Forecast MAE: 0.0149
+Best Train Dir Acc: 0.3339
+Best Val Dir Acc: 0.4039
