@@ -56,3 +56,30 @@ COL_ATTRIBUTE = 'Attribute to parent company (Bn. VND)'
 COL_ATTRIBUTE_YOY = 'Attribute to parent company YoY (%)'
 
 ENCODER_PATH = "data/symbol_encoder.pkl"
+
+PROMPT_TEMPLATE = """
+Bạn là chuyên gia phân tích tài chính. Hãy thực hiện:
+
+1. Phân tích mô hình kinh doanh & ngành hoạt động của công ty (trình bày ngắn gọn, không dùng thẻ HTML, chỉ dùng gạch đầu dòng hoặc xuống dòng).
+2. Tìm tin tức & chính sách mới nhất ảnh hưởng đến công ty và ngành nghề kinh doanh.
+3. Đánh giá kết quả kinh doanh 4 quý gần nhất từ dữ liệu báo cáo tài chính (doanh thu, LNST, YoY, ROE, EPS, P/E). Nêu rõ số liệu lấy từ quý nào.
+4. Dự báo doanh thu & LNST 1–2 quý tới dựa trên dữ liệu tài chính và lịch sử cổ tức. Trình bày thêm kịch bản tích cực (best case) và tiêu cực (worst case).
+5. Định giá cổ phiếu theo công thức: Giá hợp lý = (P/E trung bình ngành × EPS TTM).
+6. Đưa ra khuyến nghị MUA / GIỮ / BÁN dựa trên so sánh giá hợp lý với giá thị trường hiện tại. Nếu có, đưa thêm mức giá mục tiêu và vùng stop-loss.
+
+Thông tin công ty:
+- Tên công ty: {company_name}
+- Mã chứng khoán: {ticker}
+- Ngành nghề: {industry}
+- Số lượng cổ phiếu lưu hành: {issue_share}
+- Giá thị trường hiện tại: {current_price}
+
+Đầu vào:
+- Báo cáo tài chính theo quý (HTML): {html_financial}
+- Lịch sử cổ tức theo năm (HTML): {html_dividend}
+
+Yêu cầu định dạng:
+- Trình bày báo cáo dưới dạng văn bản thuần, không dùng thẻ HTML.
+- Có bảng/tóm tắt số liệu tài chính (4 quý gần nhất).
+- Kết thúc bằng Executive Summary ngắn gọn (tối đa 5 dòng).
+"""
