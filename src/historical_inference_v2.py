@@ -1,4 +1,4 @@
-# Updated inference script for CNN-LSTM **Return** Forecasting (H=14, ±7% cap)
+# Updated inference script for CNN-LSTM Return Forecasting (H=14, ±7% cap)
 import os
 import json
 import joblib
@@ -11,7 +11,7 @@ from src.stock_config import *
 from src.fetch_historical_data import process_symbol, post_process_data
 
 # --- Constants ---
-VERSION_TAG = "v2_H14_logret_cap7pct"
+VERSION_TAG = "v2_regression_H14"  # match training tag
 MODEL_DIR = os.path.join("models", "cnn_lstm_close_regression", VERSION_TAG)
 
 # daily cap (±7%) in log-return space
@@ -22,14 +22,13 @@ MAX_LOG_RET = float(np.log1p(MAX_DAILY_CHANGE))
 def load_artifacts():
     model = load_model(os.path.join(MODEL_DIR, "cnn_lstm_forecast_model.keras"))
     scaler_X = joblib.load(os.path.join(MODEL_DIR, "scaler_X.pkl"))
-    # scaler_y removed (we predict returns now)
     with open(os.path.join(MODEL_DIR, "metadata.json")) as f:
         metadata = json.load(f)
     return model, scaler_X, metadata
 
 # --- Predict close price series (multi-step in one forward pass) ---
 def get_close_prediction(symbol: str, interval: int) -> pd.DataFrame:
-    # we trained for 14 steps; allow any interval <= 14
+    # trained for 14 steps; allow any interval <= 14
     if interval > 14:
         raise ValueError("Model was trained for 14 steps. Please request interval <= 14.")
 
@@ -57,14 +56,13 @@ def get_close_prediction(symbol: str, interval: int) -> pd.DataFrame:
 def predict_close_price_series(raw_df: pd.DataFrame, forecast_steps: int = 14, debug: bool = False) -> pd.DataFrame:
     model, scaler_X, metadata = load_artifacts()
     input_features = metadata["input_features"]
-    # targets are returns now; metadata also has 'target_cols' & 'target_type'
     seq_len = metadata["input_seq_len"]
     horizon = metadata["forecast_horizon"]
 
     if forecast_steps > horizon:
         raise ValueError(f"Requested {forecast_steps} steps, but model horizon is {horizon}.")
 
-    # --- Feature Engineering for Inference (must mirror training) ---
+    # --- Feature Engineering for Inference (mirror training) ---
     for lag in range(1, 31):
         raw_df[f"lag_close_{lag}"] = raw_df[COL_CLOSE].shift(lag)
     raw_df["delta_close"] = raw_df[COL_CLOSE].diff()
@@ -87,7 +85,7 @@ def predict_close_price_series(raw_df: pd.DataFrame, forecast_steps: int = 14, d
 
     # Single forward pass predicts the next H **returns** (not prices)
     X_input = sequence.reshape(1, seq_len, len(input_features))
-    y_ret_pred, y_dir_pred = model.predict(X_input, verbose=0)  # y_ret_pred shape: (1, H)
+    y_ret_pred = model.predict(X_input, verbose=0)  # shape: (1, H)
 
     # clip per-day returns to ±log(1.07) just like training
     y_ret_pred = np.clip(y_ret_pred, -MAX_LOG_RET, MAX_LOG_RET)
@@ -105,6 +103,9 @@ def predict_close_price_series(raw_df: pd.DataFrame, forecast_steps: int = 14, d
         print(f"Pred returns (first 5): {ret_path[:5]}")
         print(f"Pred prices  (first 5): {price_path[:5]}")
 
-    # output as DataFrame with same COL_CLOSE column
-    pred_df = pd.DataFrame(price_path, columns=[COL_CLOSE])
+    # output as DataFrame (include returns for debugging/analysis if you wish)
+    pred_df = pd.DataFrame({
+        "predicted_return": ret_path,
+        COL_CLOSE: price_path
+    })
     return pred_df
