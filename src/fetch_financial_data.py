@@ -6,7 +6,7 @@ from vnstock import Finance
 
 # Project imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from src.stock_config import *
+from src.constants import *
 
 def fetch_financial_single_symbol(symbol: str) -> pd.DataFrame:
     finance_api = Finance(SOURCE_DATA, symbol, COL_QUARTER)

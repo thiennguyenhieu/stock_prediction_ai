@@ -19,5 +19,5 @@ plotly==5.18.0
 # Gradient boosting
 lightgbm==4.1.0
 
-# Hugging Face inference via OpenAI-compatible API
-openai==1.40.0
+# OpenAI-compatible API
+openai==1.100.2

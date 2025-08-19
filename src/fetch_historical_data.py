@@ -11,7 +11,7 @@ from vnstock import Quote
 
 # Project imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from src.stock_config import *
+from src.constants import *
 from src.fetch_general_info import fetch_all_symbols
 from src.utility import save_dataframe_to_csv
 from src.feature_engineering import *

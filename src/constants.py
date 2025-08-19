@@ -56,9 +56,11 @@ COL_ATTRIBUTE = 'Attribute to parent company (Bn. VND)'
 COL_ATTRIBUTE_YOY = 'Attribute to parent company YoY (%)'
 
 ENCODER_PATH = "data/symbol_encoder.pkl"
-
+INSTRUCTION_TEMPLATE = """
+Bạn là chuyên gia phân tích tài chính.
+"""
 PROMPT_TEMPLATE = """
-Bạn là chuyên gia phân tích tài chính. Hãy thực hiện:
+Hãy thực hiện:
 
 1. Phân tích mô hình kinh doanh & ngành hoạt động của công ty (trình bày ngắn gọn, không dùng thẻ HTML, chỉ dùng gạch đầu dòng hoặc xuống dòng).
 2. Tìm tin tức & chính sách mới nhất ảnh hưởng đến công ty và ngành nghề kinh doanh.
@@ -81,5 +83,27 @@ Thông tin công ty:
 Yêu cầu định dạng:
 - Trình bày báo cáo dưới dạng văn bản thuần, không dùng thẻ HTML.
 - Có bảng/tóm tắt số liệu tài chính (4 quý gần nhất).
-- Kết thúc bằng Executive Summary ngắn gọn (tối đa 5 dòng).
+- Kết thúc bằng Tổng Kết ngắn gọn (tối đa 5 dòng).
 """
+
+VI_STRINGS = {
+    "app_title": "📈 Ứng dụng Dự báo Cổ phiếu",
+    "sidebar_header": "📊 Thiết lập Cổ phiếu",
+    "enter_symbol": "Nhập mã cổ phiếu (ví dụ: ACB)",
+    "apply_button": "Áp dụng",
+    "invalid_symbol_info": "👈 Vui lòng chọn một mã hợp lệ gồm 3 ký tự và nhấn **Áp dụng**.",
+    "symbol_not_found": "Mã '{symbol}' không tồn tại trong dữ liệu mô hình.",
+    "loading_spinner": "⏳ Đang tải và phân tích dữ liệu cổ phiếu...",
+    "industry": "**Ngành nghề:** {industry}",
+    "shares_outstanding": "**Số cổ phiếu đang lưu hành:** {shares_outstanding:,}",
+    "price_forecast": "📉 Dự báo giá cho 14 ngày tới",
+    "dividend_history": "💸 Lịch sử Cổ tức",
+    "financial_report": "📑 Báo cáo Tài chính Hàng quý",
+    "ai_analysis": "📊 Phân tích Cổ phiếu bằng AI",
+    "no_recent_price": "Không có dữ liệu giá gần đây.",
+    "col_date": "Ngày",
+    "col_close_price": "Giá đóng cửa",
+    "col_volume": "Khối lượng",
+    "actual_price": "Giá thực tế",
+    "predicted_price": "Giá dự báo",
+}

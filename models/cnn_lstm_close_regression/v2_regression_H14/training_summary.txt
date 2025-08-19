@@ -1,3 +1,0 @@
-Best Train Return MAE: 0.0343
-Best Val Return MAE: 0.0339
-Reconstructed Price MAE: 0.1602

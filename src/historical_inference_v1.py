@@ -7,7 +7,7 @@ import pandas as pd
 from pandas.tseries.offsets import BDay
 from datetime import date
 from tensorflow.keras.models import load_model
-from src.stock_config import *
+from src.constants import *
 from src.fetch_historical_data import process_symbol, post_process_data
 
 # --- Constants ---
@@ -25,7 +25,7 @@ def load_artifacts():
 
 # --- Predict close price series ---
 def get_close_prediction(symbol: str, interval: int) -> pd.DataFrame:
-    start_date = (date.today() - pd.DateOffset(years=1)).strftime("%Y-%m-%d")
+    start_date = (date.today() - pd.DateOffset(years=2)).strftime("%Y-%m-%d")
     today = date.today().strftime("%Y-%m-%d")
 
     df = process_symbol(symbol, start_date, today)

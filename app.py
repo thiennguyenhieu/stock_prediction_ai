@@ -6,33 +6,10 @@ from src.fetch_historical_data import fetch_recent_price
 from src.fetch_financial_data import fetch_financial_single_symbol
 from src.fetch_general_info import fetch_all_symbols, fetch_company_overview, fetch_dividend
 from src.historical_inference_v1 import get_close_prediction
-from src.hf_inference import get_completion
-from src.stock_config import *
+from src.stock_analysis import get_completion
+from src.constants import *  # VI_STRINGS, COL_*, PROMPT_TEMPLATE
 
-# ------------------ Constants ------------------
-valid_symbols_with_info = fetch_all_symbols()  # Return [symbol, exchange, organ name]
-valid_symbols = valid_symbols_with_info[valid_symbols_with_info.iloc[:, 0].str.len() == 3].iloc[:, 0].tolist()
-
-# ------------------ Helper Functions ------------------
-def get_stock_info_by_symbol(symbol: str, df) -> tuple:
-    row = df[df.iloc[:, 0] == symbol]
-    if not row.empty:
-        exchange = row.iloc[0, 1]
-        organ_name = row.iloc[0, 2]
-        return exchange, organ_name
-    return None, None
-
-def highlight_value(val):
-    if val > 0:
-        return 'color: green; font-weight: bold;'
-    elif val < 0:
-        return 'color: red; font-weight: bold;'
-    return ''  # no style for exactly zero
-
-def format_thousands(v):
-    return "" if pd.isna(v) else f"{v:,.0f}"
-
-# ------------------ Cache Wrappers ------------------
+# ---------- Optional caching ----------
 @st.cache_data(show_spinner=False)
 def load_recent_price(symbol: str):
     return fetch_recent_price(symbol)
@@ -49,118 +26,181 @@ def load_dividend(symbol: str):
 def load_financials(symbol: str):
     return fetch_financial_single_symbol(symbol).head(8).reset_index(drop=True)
 
-@st.cache_data(show_spinner=False)
 def run_completion(prompt: str):
     return get_completion(prompt)
 
-# ------------------ UI layout ------------------
-st.set_page_config(layout="wide") # set wide layout
+# ---------- Helpers ----------
+def get_stock_info_by_symbol(symbol: str, df) -> tuple:
+    row = df[df.iloc[:, 0] == symbol]
+    if not row.empty:
+        exchange = row.iloc[0, 1]
+        organ_name = row.iloc[0, 2]
+        return exchange, organ_name
+    return None, None
 
-st.title("📈 Stock Predictor App")
+# ---------- Static data ----------
+valid_symbols_with_info = fetch_all_symbols()
+valid_symbols = valid_symbols_with_info[valid_symbols_with_info.iloc[:, 0].str.len() == 3].iloc[:, 0].tolist()
+
+# ---------- Layout ----------
+st.set_page_config(layout="wide")
+st.title(VI_STRINGS["app_title"])
+
+# placeholders for sections
+header_ph    = st.empty()
+chart_ph     = st.empty()
+dividend_ph  = st.empty()
+finance_ph   = st.empty()
+analysis_ph  = st.empty()
+info_ph      = st.empty()
+
+# session state (no default symbol on first load)
+if "current_symbol" not in st.session_state:
+    st.session_state.current_symbol = None
 
 with st.sidebar:
-    st.header("📊 Stock Settings")
-    symbol = st.text_input("Enter Stock Symbol (e.g., ACB)", value="ACB").upper()
-    apply_clicked = st.button("Apply")
+    st.header(VI_STRINGS["sidebar_header"])
+    # no default value; empty input initially
+    symbol_input = st.text_input(VI_STRINGS["enter_symbol"], value="").upper()
+    apply_clicked = st.button(VI_STRINGS["apply_button"], type="primary")
 
-# ------------------ Main Logic ------------------
-if not apply_clicked:
-    st.info("👈 Please use the sidebar to select stock symbol and forecast options, then click **Apply**.")
+def clear_sections():
+    header_ph.empty(); chart_ph.empty(); dividend_ph.empty()
+    finance_ph.empty(); analysis_ph.empty(); info_ph.empty()
 
-if apply_clicked:
+def render_dashboard(symbol: str):
+    clear_sections()
+
+    # Validate BEFORE any fetch
+    if not symbol:
+        with info_ph:
+            st.info(VI_STRINGS["invalid_symbol_info"])
+        return
+
     if symbol not in valid_symbols:
-        st.error(f"Symbol '{symbol}' not found in model data.")
-    else:
-        with st.spinner("⏳ Fetching and analyzing stock data..."):
-            # --- Load cached data ---
-            df_real = load_recent_price(symbol)
-            df_pred = load_prediction(symbol, 14)
-            df_dividend = load_dividend(symbol)
-            df_finance_display = load_financials(symbol)
+        with info_ph:
+            st.info(VI_STRINGS["invalid_symbol_info"])
+            st.error(VI_STRINGS["symbol_not_found"].format(symbol=symbol))
+        return
 
-            exchange, organ_name = get_stock_info_by_symbol(symbol, valid_symbols_with_info)
-            shares_outstanding, industry = fetch_company_overview(symbol)
+    with st.spinner(VI_STRINGS["loading_spinner"]):
+        df_real = load_recent_price(symbol)
+        if df_real is None or df_real.empty:
+            with info_ph:
+                st.error(VI_STRINGS["no_recent_price"])
+            return
 
+        df_pred = load_prediction(symbol, 14)
+        df_div  = load_dividend(symbol)
+        df_fin  = load_financials(symbol)
+
+        if df_pred is None or df_pred.empty:
+            with info_ph:
+                st.warning(VI_STRINGS["no_recent_price"])
+            return
+
+        # ensure COL_TIME exists on prediction
+        if COL_TIME not in df_pred.columns:
+            last_dt = pd.to_datetime(df_real[COL_TIME].iloc[-1])
+            forecast_dates = pd.date_range(
+                start=last_dt + pd.offsets.BDay(1),
+                periods=len(df_pred), freq=pd.offsets.BDay()
+            )
+            df_pred.insert(0, COL_TIME, forecast_dates)
+
+        # ensure datetime
+        df_real[COL_TIME] = pd.to_datetime(df_real[COL_TIME])
+        df_pred[COL_TIME] = pd.to_datetime(df_pred[COL_TIME])
+
+        exchange, organ_name = get_stock_info_by_symbol(symbol, valid_symbols_with_info)
+        shares_outstanding, industry = fetch_company_overview(symbol)
+
+        # Header
+        with header_ph.container():
             st.markdown("&nbsp;", unsafe_allow_html=True)
             st.subheader(f"🏢 {organ_name} ({exchange}: {symbol})")
-            st.markdown(f"**Industry:** {industry}")
-            st.markdown(f"**Shares outstanding:** {shares_outstanding:,}")
+            st.markdown(VI_STRINGS["industry"].format(industry=industry))
+            st.markdown(VI_STRINGS["shares_outstanding"].format(shares_outstanding=shares_outstanding))
 
-            # --- Price Forecast Plot ---
+        # Chart
+        with chart_ph.container():
             st.markdown("&nbsp;", unsafe_allow_html=True)
-            st.subheader("📉 Price forecast for the next 14 days")
+            st.subheader(VI_STRINGS["price_forecast"])
 
             fig = go.Figure()
-
             fig.add_trace(go.Scatter(
                 x=df_real[COL_TIME], y=df_real[COL_CLOSE],
-                mode='lines+markers', name='Actual Price',
+                mode='lines+markers', name=VI_STRINGS["actual_price"],
                 marker=dict(symbol='circle', color='blue'),
                 line=dict(color='blue'),
-                hovertemplate='Date: %{x|%Y-%m-%d}<br>Actual Price: %{y:.2f}<extra></extra>',
+                hovertemplate=(
+                    f'{VI_STRINGS["col_date"]}: %{{x|%Y-%m-%d}}'
+                    f'<br>{VI_STRINGS["actual_price"]}: %{{y:.2f}}<extra></extra>'
+                ),
                 yaxis='y1'
             ))
-
             fig.add_trace(go.Scatter(
                 x=df_pred[COL_TIME], y=df_pred[COL_CLOSE],
-                mode='lines+markers', name='Predicted Price',
+                mode='lines+markers', name=VI_STRINGS["predicted_price"],
                 marker=dict(symbol='x', color='orange'),
                 line=dict(color='orange', dash='dash'),
-                hovertemplate='Date: %{x|%Y-%m-%d}<br>Predicted Price: %{y:.2f}<extra></extra>',
+                hovertemplate=(
+                    f'{VI_STRINGS["col_date"]}: %{{x|%Y-%m-%d}}'
+                    f'<br>{VI_STRINGS["predicted_price"]}: %{{y:.2f}}<extra></extra>'
+                ),
                 yaxis='y1'
             ))
-
             fig.add_trace(go.Scatter(
                 x=[df_real[COL_TIME].iloc[-1], df_pred[COL_TIME].iloc[0]],
                 y=[df_real[COL_CLOSE].iloc[-1], df_pred[COL_CLOSE].iloc[0]],
                 mode='lines', line=dict(color='orange', dash='dash'),
                 hoverinfo='skip', showlegend=False, yaxis='y1'
             ))
-
-            fig.add_trace(go.Bar(
-                x=df_real[COL_TIME], y=df_real[COL_VOLUME],
-                name='Volume', marker_color='rgba(100, 100, 255, 0.3)',
-                yaxis='y2', opacity=0.5
-            ))
-
+            if COL_VOLUME in df_real.columns:
+                fig.add_trace(go.Bar(
+                    x=df_real[COL_TIME], y=df_real[COL_VOLUME],
+                    name=VI_STRINGS["col_volume"],
+                    marker_color='rgba(100, 100, 255, 0.3)',
+                    yaxis='y2', opacity=0.5
+                ))
             fig.update_layout(
-                xaxis_title='Date',
-                yaxis=dict(title='Close Price', side='left'),
-                yaxis2=dict(title='Volume', overlaying='y', side='right', showgrid=False),
+                xaxis_title=VI_STRINGS["col_date"],
+                yaxis=dict(title=VI_STRINGS["col_close_price"], side='left'),
+                yaxis2=dict(title=VI_STRINGS["col_volume"], overlaying='y', side='right', showgrid=False),
                 legend=dict(x=0, y=1),
                 hovermode='x unified',
                 template='plotly_white',
                 margin=dict(t=10, b=40, l=40, r=10),
                 height=450
             )
-
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- Dividend ---
+        # Dividend
+        with dividend_ph.container():
             st.markdown("&nbsp;", unsafe_allow_html=True)
-            st.subheader("💸 Dividend History")
+            st.subheader(VI_STRINGS["dividend_history"])
+            st.markdown(df_div.style.hide(axis="index").to_html(), unsafe_allow_html=True)
 
-            html_dividend = df_dividend.style.hide(axis="index").to_html()
-            st.markdown(html_dividend, unsafe_allow_html=True)
-
-            # --- Financial Report Table --- 
+        # Financials
+        with finance_ph.container():
             st.markdown("&nbsp;", unsafe_allow_html=True)
-            st.subheader("📑 Quarterly Financial Report")
-
+            st.subheader(VI_STRINGS["financial_report"])
             html_financial = (
-                df_finance_display
+                df_fin
                 .style
                 .hide(axis="index")
                 .format({COL_ATTRIBUTE: "{:,.0f}", COL_REVENUE: "{:,.0f}"})
-                .applymap(highlight_value, subset=[COL_ATTRIBUTE_YOY])
+                .applymap(lambda v: 'color: green; font-weight: bold;' if v > 0
+                          else ('color: red; font-weight: bold;' if v < 0 else ''),
+                          subset=[COL_ATTRIBUTE_YOY])
                 .to_html()
             )
             st.markdown(html_financial, unsafe_allow_html=True)
 
-            # --- Overview evaluation --- 
+        # AI Analysis
+        with analysis_ph.container():
             st.markdown("&nbsp;", unsafe_allow_html=True)
-            st.subheader("📊 AI-Powered Stock Analysis")
-
+            st.subheader(VI_STRINGS["ai_analysis"])
             final_prompt = PROMPT_TEMPLATE.format(
                 company_name=organ_name,
                 ticker=symbol,
@@ -168,8 +208,21 @@ if apply_clicked:
                 issue_share=shares_outstanding,
                 current_price=df_real[COL_CLOSE].iloc[-1],
                 html_financial=html_financial,
-                html_dividend=html_dividend
+                html_dividend=df_div.style.hide(axis="index").to_html()
             )
-
             response = run_completion(final_prompt)
             st.write(response)
+
+# -------- Single render path --------
+# Only render after clicking Apply (and remember the choice)
+if apply_clicked:
+    st.session_state.current_symbol = symbol_input
+    render_dashboard(symbol_input)
+elif st.session_state.current_symbol:
+    # If a symbol was applied previously in this session, show it
+    render_dashboard(st.session_state.current_symbol)
+else:
+    # First load: no symbol yet — show guidance and no data fetches
+    clear_sections()
+    with info_ph:
+        st.info(VI_STRINGS["invalid_symbol_info"])

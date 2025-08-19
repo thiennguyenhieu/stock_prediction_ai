@@ -2,7 +2,7 @@ import pandas as pd
 from vnstock import Listing
 from vnstock import Company
 
-from src.stock_config import *
+from src.constants import *
 
 # --- Symbol Listing ---
 def fetch_all_symbols() -> pd.DataFrame:

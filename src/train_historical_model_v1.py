@@ -17,7 +17,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import Huber
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from src.stock_config import *
+from src.constants import *
 
 for device in tf.config.list_physical_devices('GPU'):
     tf.config.experimental.set_memory_growth(device, True)
