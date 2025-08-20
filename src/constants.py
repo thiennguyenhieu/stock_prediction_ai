@@ -56,18 +56,41 @@ COL_ATTRIBUTE = 'Attribute to parent company (Bn. VND)'
 COL_ATTRIBUTE_YOY = 'Attribute to parent company YoY (%)'
 
 ENCODER_PATH = "data/symbol_encoder.pkl"
-INSTRUCTION_TEMPLATE = """
-Bạn là chuyên gia phân tích tài chính.
-"""
-PROMPT_TEMPLATE = """
-Hãy thực hiện:
 
-1. Phân tích mô hình kinh doanh & ngành hoạt động của công ty (trình bày ngắn gọn, không dùng thẻ HTML, chỉ dùng gạch đầu dòng hoặc xuống dòng).
-2. Tìm tin tức & chính sách mới nhất ảnh hưởng đến công ty và ngành nghề kinh doanh.
-3. Đánh giá kết quả kinh doanh 4 quý gần nhất từ dữ liệu báo cáo tài chính (doanh thu, LNST, YoY, ROE, EPS, P/E). Nêu rõ số liệu lấy từ quý nào.
-4. Dự báo doanh thu & LNST 1–2 quý tới dựa trên dữ liệu tài chính và lịch sử cổ tức. Trình bày thêm kịch bản tích cực (best case) và tiêu cực (worst case).
-5. Định giá cổ phiếu theo công thức: Giá hợp lý = (P/E trung bình ngành × EPS TTM).
-6. Đưa ra khuyến nghị MUA / GIỮ / BÁN dựa trên so sánh giá hợp lý với giá thị trường hiện tại. Nếu có, đưa thêm mức giá mục tiêu và vùng stop-loss.
+PROMPT_TEMPLATE = """
+Bạn là chuyên gia phân tích tài chính. Hãy thực hiện và tuân thủ nghiêm các ràng buộc:
+
+Mục tiêu: Phân tích ngắn gọn, có luận điểm. Không lặp số liệu gốc từ JSON.
+
+1) Mô hình kinh doanh & ngành:
+- Trình bày súc tích (gạch đầu dòng hoặc xuống dòng), nêu nguồn doanh thu chính, lợi thế cạnh tranh, rủi ro đặc thù ngành.
+
+2) Tin tức & chính sách ngành:
+- Tóm lược xu hướng gần đây nếu có trong đầu vào; nếu thiếu dữ liệu mới, nêu 2–3 rủi ro và 2–3 cơ hội ngành (mang tính nguyên lý, không suy diễn vô dữ liệu).
+
+3) KQKD 4 quý gần nhất (từ JSON):
+- Phân tích xu hướng doanh thu, LNST, biên LN gộp/thuần, chi phí vận hành, đòn bẩy tài chính, dòng tiền nếu có.
+- Không liệt kê lại số; chỉ kết luận theo hướng: tăng/giảm/ổn định, cải thiện/suy giảm biên, chất lượng lợi nhuận.
+
+4) Dự báo 2 quý tới:
+- Nêu giả định then chốt (tăng trưởng doanh thu, biên gộp/thuần, mùa vụ/one-off).
+- Cho 3 kịch bản: Base, Best (+delta doanh thu/biên), Worst (−delta).
+- Xuất kết quả dạng: Doanh thu & LNST (mô tả xu hướng + mức thay đổi tương đối, không ghi số tuyệt đối).
+
+5) Định giá:
+- EPS TTM = LNST 4 quý gần nhất / Số CP lưu hành.
+- EPS TTM dự đoán = (LNST 4 quý gần nhất – LNST quý sớm nhất + LNST 2 quý dự báo) / Số CP lưu hành.
+- Giá hợp lý = P/E trung bình ngành × EPS TTM dự đoán.
+
+6) Khuyến nghị:
+- MUA / GIỮ / BÁN dựa trên chênh lệch giữa Giá hợp lý và Giá hiện tại.
+- Nêu giá mục tiêu (Base case) và vùng stop-loss (mặc định 8–12% dưới giá mua; điều chỉnh theo rủi ro ngành).
+
+Ràng buộc trình bày:
+- Văn bản thuần, không HTML.
+- Mỗi mục ≤ 6 dòng.
+- Không trích dẫn hoặc lặp số liệu gốc; chỉ nêu xu hướng/luận điểm.
+- Kết thúc bằng "Tổng kết" (≤ 5 dòng) nêu 3 ý: xu hướng cốt lõi, định giá tương đối, hành động khuyến nghị.
 
 Thông tin công ty:
 - Tên công ty: {company_name}
@@ -77,13 +100,8 @@ Thông tin công ty:
 - Giá thị trường hiện tại: {current_price}
 
 Đầu vào:
-- Báo cáo tài chính theo quý (HTML): {html_financial}
-- Lịch sử cổ tức theo năm (HTML): {html_dividend}
-
-Yêu cầu định dạng:
-- Trình bày báo cáo dưới dạng văn bản thuần, không dùng thẻ HTML.
-- Có bảng/tóm tắt số liệu tài chính (4 quý gần nhất).
-- Kết thúc bằng Tổng Kết ngắn gọn (tối đa 5 dòng).
+- Báo cáo tài chính theo quý (JSON): {json_financial}
+- Lịch sử cổ tức theo năm (JSON): {json_dividend}
 """
 
 VI_STRINGS = {

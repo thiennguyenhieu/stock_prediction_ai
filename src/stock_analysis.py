@@ -1,6 +1,7 @@
 # stock_analysis.py
 import os
 from openai import OpenAI
+from src.constants import *
 
 # Make sure OPENAI_API_KEY is set in your environment
 api_key = os.getenv("OPENAI_API_KEY")
@@ -9,21 +10,16 @@ if not api_key:
 
 client = OpenAI(api_key=api_key)
 
-# Templates
-INSTRUCTION_TEMPLATE = "You are an expert financial analyst. Answer clearly and concisely."
-PROMPT_TEMPLATE = "Analyze the stock performance of NVDA compared to AMD over the last quarter."
-
 def get_completion(
-    instructions: str = INSTRUCTION_TEMPLATE,
     prompt: str = PROMPT_TEMPLATE,
-    model: str = "gpt-4o-mini",
+    model: str = "gpt-5",
 ) -> str:
     """
     Call OpenAI Responses API with instructions + prompt.
     """
+    #print(prompt)
     response = client.responses.create(
         model=model,
-        instructions=instructions,
         input=prompt,
     )
     return response.output_text

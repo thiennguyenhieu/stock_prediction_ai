@@ -207,8 +207,8 @@ def render_dashboard(symbol: str):
                 industry=industry,
                 issue_share=shares_outstanding,
                 current_price=df_real[COL_CLOSE].iloc[-1],
-                html_financial=html_financial,
-                html_dividend=df_div.style.hide(axis="index").to_html()
+                json_financial=df_div.to_json(orient="records", indent=2),
+                json_dividend=df_fin.to_json(orient="records", indent=2)
             )
             response = run_completion(final_prompt)
             st.write(response)
