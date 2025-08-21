@@ -58,54 +58,68 @@ COL_ATTRIBUTE_YOY = 'Attribute to parent company YoY (%)'
 ENCODER_PATH = "data/symbol_encoder.pkl"
 
 PROMPT_TEMPLATE = """
-Bạn là chuyên gia phân tích tài chính. Hãy thực hiện và tuân thủ nghiêm các ràng buộc:
+Bạn là CHUYÊN GIA PHÂN TÍCH TÀI CHÍNH.
+Nhiệm vụ: Viết báo cáo ngắn gọn, có luận điểm, tuân thủ quy tắc định dạng và tính toán chỉ số tổng hợp từ JSON.
 
-Mục tiêu: Phân tích ngắn gọn, có luận điểm. Không lặp số liệu gốc từ JSON.
-
-1) Mô hình kinh doanh & ngành:
-- Trình bày súc tích (gạch đầu dòng hoặc xuống dòng), nêu nguồn doanh thu chính, lợi thế cạnh tranh, rủi ro đặc thù ngành.
-
-2) Tin tức & chính sách ngành:
-- Tóm lược xu hướng gần đây nếu có trong đầu vào; nếu thiếu dữ liệu mới, nêu 2–3 rủi ro và 2–3 cơ hội ngành (mang tính nguyên lý, không suy diễn vô dữ liệu).
-
-3) KQKD 4 quý gần nhất (từ JSON):
-- Phân tích xu hướng doanh thu, LNST, biên LN gộp/thuần, chi phí vận hành, đòn bẩy tài chính, dòng tiền nếu có.
-- Không liệt kê lại số; chỉ kết luận theo hướng: tăng/giảm/ổn định, cải thiện/suy giảm biên, chất lượng lợi nhuận.
-
-4) Dự báo 2 quý tới:
-- Nêu giả định then chốt (tăng trưởng doanh thu, biên gộp/thuần, mùa vụ/one-off).
-- Cho 3 kịch bản: Base, Best (+delta doanh thu/biên), Worst (−delta).
-- Xuất kết quả dạng: Doanh thu & LNST (mô tả xu hướng + mức thay đổi tương đối, không ghi số tuyệt đối).
-
-5) Định giá:
-- EPS TTM = LNST 4 quý gần nhất / Số CP lưu hành.
-- EPS TTM dự đoán = (LNST 4 quý gần nhất – LNST quý sớm nhất + LNST 2 quý dự báo) / Số CP lưu hành.
-- Giá hợp lý = P/E trung bình ngành × EPS TTM dự đoán.
-
-6) Khuyến nghị:
-- MUA / GIỮ / BÁN dựa trên chênh lệch giữa Giá hợp lý và Giá hiện tại.
-- Nêu giá mục tiêu (Base case) và vùng stop-loss (mặc định 8–12% dưới giá mua; điều chỉnh theo rủi ro ngành).
-
-Ràng buộc trình bày:
+QUY TẮC BẮT BUỘC:
 - Văn bản thuần, không HTML.
-- Mỗi mục ≤ 6 dòng.
-- Không trích dẫn hoặc lặp số liệu gốc; chỉ nêu xu hướng/luận điểm.
-- Kết thúc bằng "Tổng kết" (≤ 5 dòng) nêu 3 ý: xu hướng cốt lõi, định giá tương đối, hành động khuyến nghị.
+- Mỗi mục ≤ 6 dòng, rõ ràng, không vòng vo.
+- Không liệt kê số liệu từng quý; chỉ đưa **số tổng hợp** (tổng 4 quý, tổng 2 quý + dự phóng).
+- Các chỉ số quan trọng phải viết **IN HOA** hoặc **đậm**: DOANH THU, LNST, EPS TTM, EPS DỰ PHÓNG, GIÁ HỢP LÝ, KHUYẾN NGHỊ.
+- Cuối cùng có phần "Tổng kết" ≤ 5 dòng.
 
-Thông tin công ty:
-- Tên công ty: {company_name}
-- Mã chứng khoán: {ticker}
-- Ngành nghề: {industry}
-- Số lượng cổ phiếu lưu hành: {issue_share}
-- Giá thị trường hiện tại: {current_price}
+THÔNG TIN CÔNG TY:
+- Tên: {company_name}
+- Mã: {ticker}
+- Ngành: {industry}
+- Số CP lưu hành: {issue_share}
+- Giá hiện tại: {current_price}
+- P/E ngành trung bình: {pe_industry_avg}
 
-Đầu vào:
-- Báo cáo tài chính theo quý (JSON): {json_financial}
-- Lịch sử cổ tức theo năm (JSON): {json_dividend}
+ĐẦU VÀO:
+- Báo cáo tài chính (JSON): {json_financial}
+- Lịch sử cổ tức (JSON): {json_dividend}
+- Tin tức ngành/công ty: {industry_news} {company_news}
+
+CẤU TRÚC BÁO CÁO:
+
+1) Mô hình kinh doanh & ngành  
+- Nêu nguồn doanh thu chính, lợi thế cạnh tranh, rủi ro ngành.  
+
+2) Tin tức & chính sách ngành  
+- Tóm lược 2–3 tin tức/chính sách gần đây.  
+- Nếu thiếu tin tức: nêu 2–3 cơ hội và 2–3 rủi ro ngành nguyên lý.  
+
+3) Kết quả kinh doanh 4 quý gần nhất  
+- Phân tích xu hướng: doanh thu, LNST, biên lợi nhuận, chi phí, đòn bẩy, nợ vay, dòng tiền.  
+- Nêu nhận định: tăng/giảm/ổn định.  
+
+4) Dự báo 2 quý tới  
+- Nêu giả định then chốt.  
+- Đưa ra 3 kịch bản (Base, Best, Worst).  
+- Mỗi kịch bản: hiển thị **DOANH THU dự phóng** & **LNST dự phóng** (2 số, làm tròn) + mô tả thay đổi tương đối.  
+
+5) Định giá  
+- Tính và hiển thị bắt buộc:  
+  + **LNST 4 quý gần nhất** (tổng hợp, làm tròn)  
+  + **LNST 2 quý gần nhất + 2 quý dự báo** (tổng hợp, làm tròn)  
+  + **P/E ngành trung bình {pe_industry_avg}**  
+  + **EPS TTM** (làm tròn)  
+  + **EPS DỰ PHÓNG** (làm tròn)  
+  + **GIÁ HỢP LÝ (Base case)** (làm tròn)  
+- So sánh với giá hiện tại {current_price}.  
+
+6) Khuyến nghị  
+- Đưa ra **KHUYẾN NGHỊ: MUA / GIỮ / BÁN** dựa trên chênh lệch giá hợp lý vs giá hiện tại.  
+- Nêu giá mục tiêu (Base case).  
+- Nêu vùng stop-loss (8–12% dưới giá mua).  
+
+7) Tổng kết  
+- Tóm tắt 3 điểm: xu hướng kinh doanh, định giá tương đối, hành động khuyến nghị.  
 """
 
 VI_STRINGS = {
-    "app_title": "📈 Ứng dụng Dự báo Cổ phiếu",
+    "app_title": "📈 Ứng dụng Phân Tích Cổ phiếu",
     "sidebar_header": "📊 Thiết lập Cổ phiếu",
     "enter_symbol": "Nhập mã cổ phiếu (ví dụ: ACB)",
     "apply_button": "Áp dụng",
@@ -124,4 +138,9 @@ VI_STRINGS = {
     "col_volume": "Khối lượng",
     "actual_price": "Giá thực tế",
     "predicted_price": "Giá dự báo",
+    "exercise_date": "Ngày thực hiện",
+    "cash_year": "Năm chi trả",
+    "cash_dividend_percentage": "Tỷ lệ cổ tức tiền mặt (%)",
+    "issue_method": "Phương thức phát hành",
+    "enable_ai_analysis": "Bật phân tích AI",
 }

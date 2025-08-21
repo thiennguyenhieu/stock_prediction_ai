@@ -49,8 +49,8 @@ st.title(VI_STRINGS["app_title"])
 # placeholders for sections
 header_ph    = st.empty()
 chart_ph     = st.empty()
-dividend_ph  = st.empty()
 finance_ph   = st.empty()
+dividend_ph  = st.empty()
 analysis_ph  = st.empty()
 info_ph      = st.empty()
 
@@ -60,15 +60,15 @@ if "current_symbol" not in st.session_state:
 
 with st.sidebar:
     st.header(VI_STRINGS["sidebar_header"])
-    # no default value; empty input initially
     symbol_input = st.text_input(VI_STRINGS["enter_symbol"], value="").upper()
+    ai_enabled = st.checkbox(VI_STRINGS["enable_ai_analysis"], value=False)
     apply_clicked = st.button(VI_STRINGS["apply_button"], type="primary")
 
 def clear_sections():
-    header_ph.empty(); chart_ph.empty(); dividend_ph.empty()
-    finance_ph.empty(); analysis_ph.empty(); info_ph.empty()
+    header_ph.empty(); chart_ph.empty(); finance_ph.empty()
+    dividend_ph.empty(); analysis_ph.empty(); info_ph.empty()
 
-def render_dashboard(symbol: str):
+def render_dashboard(symbol: str, ai_enabled: bool = False):
     clear_sections()
 
     # Validate BEFORE any fetch
@@ -175,12 +175,6 @@ def render_dashboard(symbol: str):
             )
             st.plotly_chart(fig, use_container_width=True)
 
-        # Dividend
-        with dividend_ph.container():
-            st.markdown("&nbsp;", unsafe_allow_html=True)
-            st.subheader(VI_STRINGS["dividend_history"])
-            st.markdown(df_div.style.hide(axis="index").to_html(), unsafe_allow_html=True)
-
         # Financials
         with finance_ph.container():
             st.markdown("&nbsp;", unsafe_allow_html=True)
@@ -197,30 +191,50 @@ def render_dashboard(symbol: str):
             )
             st.markdown(html_financial, unsafe_allow_html=True)
 
-        # AI Analysis
-        with analysis_ph.container():
+        # Dividend
+        with dividend_ph.container():
             st.markdown("&nbsp;", unsafe_allow_html=True)
-            st.subheader(VI_STRINGS["ai_analysis"])
-            final_prompt = PROMPT_TEMPLATE.format(
-                company_name=organ_name,
-                ticker=symbol,
-                industry=industry,
-                issue_share=shares_outstanding,
-                current_price=df_real[COL_CLOSE].iloc[-1],
-                json_financial=df_div.to_json(orient="records", indent=2),
-                json_dividend=df_fin.to_json(orient="records", indent=2)
-            )
-            response = run_completion(final_prompt)
-            st.write(response)
+            st.subheader(VI_STRINGS["dividend_history"])
+
+            rename_map = {
+                "exercise_date": VI_STRINGS["exercise_date"],
+                "cash_year": VI_STRINGS["cash_year"],
+                "cash_dividend_percentage": VI_STRINGS["cash_dividend_percentage"],
+                "issue_method": VI_STRINGS["issue_method"],
+            }
+
+            df_div_renamed = df_div.rename(columns=rename_map)
+
+            st.markdown(df_div_renamed.style.hide(axis="index").to_html(), unsafe_allow_html=True)
+
+        # AI Analysis (conditional)
+        if ai_enabled:
+            with analysis_ph.container():
+                st.markdown("&nbsp;", unsafe_allow_html=True)
+                st.subheader(VI_STRINGS["ai_analysis"])
+                final_prompt = PROMPT_TEMPLATE.format(
+                    company_name=organ_name,
+                    ticker=symbol,
+                    industry=industry,
+                    issue_share=shares_outstanding,
+                    current_price=df_real[COL_CLOSE].iloc[-1],
+                    industry_news={},
+                    company_news={},
+                    pe_industry_avg=10,
+                    json_financial=df_div.to_json(orient="records", indent=2),
+                    json_dividend=df_fin.to_json(orient="records", indent=2)
+                )
+                response = run_completion(final_prompt)
+                st.write(response)
 
 # -------- Single render path --------
 # Only render after clicking Apply (and remember the choice)
 if apply_clicked:
     st.session_state.current_symbol = symbol_input
-    render_dashboard(symbol_input)
+    render_dashboard(symbol_input, ai_enabled=ai_enabled)
 elif st.session_state.current_symbol:
     # If a symbol was applied previously in this session, show it
-    render_dashboard(st.session_state.current_symbol)
+    render_dashboard(st.session_state.current_symbol, ai_enabled=ai_enabled)
 else:
     # First load: no symbol yet — show guidance and no data fetches
     clear_sections()

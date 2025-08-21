@@ -12,7 +12,7 @@ client = OpenAI(api_key=api_key)
 
 def get_completion(
     prompt: str = PROMPT_TEMPLATE,
-    model: str = "gpt-5",
+    model: str = "gpt-5-nano",
 ) -> str:
     """
     Call OpenAI Responses API with instructions + prompt.
@@ -23,7 +23,3 @@ def get_completion(
         input=prompt,
     )
     return response.output_text
-
-if __name__ == "__main__":
-    result = get_completion()
-    print(result)
