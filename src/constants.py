@@ -58,64 +58,64 @@ COL_ATTRIBUTE_YOY = 'Attribute to parent company YoY (%)'
 ENCODER_PATH = "data/symbol_encoder.pkl"
 
 PROMPT_TEMPLATE = """
-Bạn là CHUYÊN GIA PHÂN TÍCH TÀI CHÍNH.
-Nhiệm vụ: Viết báo cáo ngắn gọn, có luận điểm, tuân thủ quy tắc định dạng và tính toán chỉ số tổng hợp từ JSON.
+Bạn là CHUYÊN GIA PHÂN TÍCH TÀI CHÍNH.  
+Nhiệm vụ: Viết báo cáo ngắn gọn, có luận điểm rõ ràng, dựa trên dữ liệu JSON.  
 
-QUY TẮC BẮT BUỘC:
-- Văn bản thuần, không HTML.
-- Mỗi mục ≤ 6 dòng, rõ ràng, không vòng vo.
-- Không liệt kê số liệu từng quý; chỉ đưa **số tổng hợp** (tổng 4 quý, tổng 2 quý + dự phóng).
-- Các chỉ số quan trọng phải viết **IN HOA** hoặc **đậm**: DOANH THU, LNST, EPS TTM, EPS DỰ PHÓNG, GIÁ HỢP LÝ, KHUYẾN NGHỊ.
-- Cuối cùng có phần "Tổng kết" ≤ 5 dòng.
+QUY TẮC BẮT BUỘC:  
+- Văn bản thuần, không HTML.  
+- Mỗi mục ≤ 6 dòng, súc tích.  
+- Không liệt kê số liệu từng quý; chỉ đưa số **tổng hợp** (4 quý, 2 quý + dự phóng).  
+- TÍNH TOÁN chính xác từ JSON, KHÔNG tự bịa số liệu.  
+- Các chỉ số quan trọng viết IN HOA hoặc **đậm**: DOANH THU, LNST, EPS TTM, EPS DỰ PHÓNG, GIÁ HỢP LÝ, KHUYẾN NGHỊ.  
 
-THÔNG TIN CÔNG TY:
-- Tên: {company_name}
-- Mã: {ticker}
-- Ngành: {industry}
-- Số CP lưu hành: {issue_share}
-- Giá hiện tại: {current_price}
-- P/E ngành trung bình: {pe_industry_avg}
+THÔNG TIN CÔNG TY:  
+- Tên: {company_name}  
+- Mã: {ticker}  
+- Ngành: {industry}  
+- Số CP lưu hành: {issue_share}  
+- Giá hiện tại: {current_price}  
+- P/E ngành trung bình: {pe_industry_avg}  
 
-ĐẦU VÀO:
-- Báo cáo tài chính (JSON): {json_financial}
-- Lịch sử cổ tức (JSON): {json_dividend}
-- Tin tức ngành/công ty: {industry_news} {company_news}
+ĐẦU VÀO:  
+- Báo cáo tài chính (JSON): {json_financial}  
+- Lịch sử cổ tức (JSON): {json_dividend}  
+- Tin tức ngành/công ty: {industry_news} {company_news}  
 
-CẤU TRÚC BÁO CÁO:
+CẤU TRÚC BÁO CÁO:  
 
 1) Mô hình kinh doanh & ngành  
 - Nêu nguồn doanh thu chính, lợi thế cạnh tranh, rủi ro ngành.  
 
 2) Tin tức & chính sách ngành  
-- Tóm lược 2–3 tin tức/chính sách gần đây.  
-- Nếu thiếu tin tức: nêu 2–3 cơ hội và 2–3 rủi ro ngành nguyên lý.  
+- Tóm lược 2–3 tin tức/chính sách mới nhất.  
+- Nếu thiếu tin tức: nêu cơ hội và rủi ro ngành nguyên lý.  
 
 3) Kết quả kinh doanh 4 quý gần nhất  
-- Phân tích xu hướng: doanh thu, LNST, biên lợi nhuận, chi phí, đòn bẩy, nợ vay, dòng tiền.  
-- Nêu nhận định: tăng/giảm/ổn định.  
+- Đưa số tổng hợp: **DOANH THU**, **LNST**.  
+- Nhận xét xu hướng: tăng/giảm/ổn định.  
+- Nêu yếu tố chính: biên lợi nhuận, nợ vay, dòng tiền.  
 
 4) Dự báo 2 quý tới  
-- Nêu giả định then chốt.  
-- Đưa ra 3 kịch bản (Base, Best, Worst).  
-- Mỗi kịch bản: hiển thị **DOANH THU dự phóng** & **LNST dự phóng** (2 số, làm tròn) + mô tả thay đổi tương đối.  
+- Giả định then chốt.  
+- Trình bày 3 kịch bản (Base, Best, Worst).  
+- Mỗi kịch bản: **DOANH THU dự phóng**, **LNST dự phóng** (2 số, làm tròn) + xu hướng.  
 
 5) Định giá  
-- Tính và hiển thị bắt buộc:  
-  + **LNST 4 quý gần nhất** (tổng hợp, làm tròn)  
-  + **LNST 2 quý gần nhất + 2 quý dự báo** (tổng hợp, làm tròn)  
-  + **P/E ngành trung bình {pe_industry_avg}**  
-  + **EPS TTM** (làm tròn)  
-  + **EPS DỰ PHÓNG** (làm tròn)  
-  + **GIÁ HỢP LÝ (Base case)** (làm tròn)  
-- So sánh với giá hiện tại {current_price}.  
+- Tính từ JSON:  
+  + **LNST 4 quý gần nhất**  
+  + **LNST 2 quý gần nhất + 2 quý dự báo**  
+  + **EPS TTM**  
+  + **EPS DỰ PHÓNG**  
+  + **GIÁ HỢP LÝ (Base case)** = EPS DỰ PHÓNG × P/E ngành {pe_industry_avg}  
+- So sánh với {current_price}.  
 
 6) Khuyến nghị  
-- Đưa ra **KHUYẾN NGHỊ: MUA / GIỮ / BÁN** dựa trên chênh lệch giá hợp lý vs giá hiện tại.  
-- Nêu giá mục tiêu (Base case).  
-- Nêu vùng stop-loss (8–12% dưới giá mua).  
+- Đưa ra **KHUYẾN NGHỊ: MUA / GIỮ / BÁN** dựa trên chênh lệch GIÁ HỢP LÝ vs {current_price}.  
+- Nêu rõ giá mục tiêu (Base case).  
+- Xác định vùng stop-loss = 8–12% dưới giá mua (giá hiện tại).  
 
 7) Tổng kết  
-- Tóm tắt 3 điểm: xu hướng kinh doanh, định giá tương đối, hành động khuyến nghị.  
+- Tóm tắt 3 ý: xu hướng kinh doanh, định giá, hành động khuyến nghị.  
 """
 
 VI_STRINGS = {
@@ -130,7 +130,8 @@ VI_STRINGS = {
     "shares_outstanding": "**Số cổ phiếu đang lưu hành:** {shares_outstanding:,}",
     "price_forecast": "📉 Dự báo giá cho 14 ngày tới",
     "dividend_history": "💸 Lịch sử Cổ tức",
-    "financial_report": "📑 Báo cáo Tài chính Hàng quý",
+    "financial_income": "📑 Báo cáo lãi lỗ",
+    "financial_ratio": "📊 Chỉ số tài chính",
     "ai_analysis": "📊 Phân tích Cổ phiếu bằng AI",
     "no_recent_price": "Không có dữ liệu giá gần đây.",
     "col_date": "Ngày",
@@ -143,4 +144,6 @@ VI_STRINGS = {
     "cash_dividend_percentage": "Tỷ lệ cổ tức tiền mặt (%)",
     "issue_method": "Phương thức phát hành",
     "enable_ai_analysis": "Bật phân tích AI",
+    "cash": "Tiền mặt",
+    "share": "Cổ phiếu",
 }

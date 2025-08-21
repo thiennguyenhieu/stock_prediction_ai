@@ -15,4 +15,23 @@ def fetch_company_overview(symbol: str) -> pd.DataFrame:
 
 # --- Company overview ---
 def fetch_dividend(symbol: str) -> pd.DataFrame:
-    return Company('TCBS', symbol).dividends().head(5)
+    df_div = Company('TCBS', symbol).dividends().head(5)
+    df_div["cash_dividend_percentage"] = (df_div["cash_dividend_percentage"] * 100).round(2).astype(str) + "%"
+    
+    issue_map = {
+        "cash": VI_STRINGS["cash"],
+        "share": VI_STRINGS["share"],
+    }
+    df_div["issue_method"] = df_div["issue_method"].map(issue_map).fillna(df_div["issue_method"])
+
+    rename_map = {
+        "exercise_date": VI_STRINGS["exercise_date"],
+        "cash_year": VI_STRINGS["cash_year"],
+        "cash_dividend_percentage": VI_STRINGS["cash_dividend_percentage"],
+        "issue_method": VI_STRINGS["issue_method"],
+    }
+
+    df_div = df_div.rename(columns=rename_map)
+    df_div.reset_index(drop=True)
+
+    return df_div

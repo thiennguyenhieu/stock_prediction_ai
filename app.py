@@ -3,7 +3,7 @@ import plotly.graph_objects as go
 import pandas as pd
 
 from src.fetch_historical_data import fetch_recent_price
-from src.fetch_financial_data import fetch_financial_single_symbol
+from src.fetch_financial_data import fetch_income_statement, fetch_ratio
 from src.fetch_general_info import fetch_all_symbols, fetch_company_overview, fetch_dividend
 from src.historical_inference_v1 import get_close_prediction
 from src.stock_analysis import get_completion
@@ -20,11 +20,15 @@ def load_prediction(symbol: str, horizon: int = 14):
 
 @st.cache_data(show_spinner=False)
 def load_dividend(symbol: str):
-    return fetch_dividend(symbol).head(5).reset_index(drop=True)
+    return fetch_dividend(symbol)
 
 @st.cache_data(show_spinner=False)
-def load_financials(symbol: str):
-    return fetch_financial_single_symbol(symbol).head(8).reset_index(drop=True)
+def load_financials_income_statement(symbol: str):
+    return fetch_income_statement(symbol)
+
+@st.cache_data(show_spinner=False)
+def load_financials_ratio(symbol: str):
+    return fetch_ratio(symbol)
 
 def run_completion(prompt: str):
     return get_completion(prompt)
@@ -49,7 +53,8 @@ st.title(VI_STRINGS["app_title"])
 # placeholders for sections
 header_ph    = st.empty()
 chart_ph     = st.empty()
-finance_ph   = st.empty()
+finance_income_ph = st.empty()
+finance_ratio_ph  = st.empty()
 dividend_ph  = st.empty()
 analysis_ph  = st.empty()
 info_ph      = st.empty()
@@ -65,7 +70,8 @@ with st.sidebar:
     apply_clicked = st.button(VI_STRINGS["apply_button"], type="primary")
 
 def clear_sections():
-    header_ph.empty(); chart_ph.empty(); finance_ph.empty()
+    header_ph.empty(); chart_ph.empty()
+    finance_income_ph.empty(); finance_ratio_ph.empty()
     dividend_ph.empty(); analysis_ph.empty(); info_ph.empty()
 
 def render_dashboard(symbol: str, ai_enabled: bool = False):
@@ -92,7 +98,8 @@ def render_dashboard(symbol: str, ai_enabled: bool = False):
 
         df_pred = load_prediction(symbol, 14)
         df_div  = load_dividend(symbol)
-        df_fin  = load_financials(symbol)
+        df_income  = load_financials_income_statement(symbol)
+        df_ratio = load_financials_ratio(symbol)
 
         if df_pred is None or df_pred.empty:
             with info_ph:
@@ -175,37 +182,23 @@ def render_dashboard(symbol: str, ai_enabled: bool = False):
             )
             st.plotly_chart(fig, use_container_width=True)
 
-        # Financials
-        with finance_ph.container():
+        # Financials income
+        with finance_income_ph.container():
             st.markdown("&nbsp;", unsafe_allow_html=True)
-            st.subheader(VI_STRINGS["financial_report"])
-            html_financial = (
-                df_fin
-                .style
-                .hide(axis="index")
-                .format({COL_ATTRIBUTE: "{:,.0f}", COL_REVENUE: "{:,.0f}"})
-                .applymap(lambda v: 'color: green; font-weight: bold;' if v > 0
-                          else ('color: red; font-weight: bold;' if v < 0 else ''),
-                          subset=[COL_ATTRIBUTE_YOY])
-                .to_html()
-            )
-            st.markdown(html_financial, unsafe_allow_html=True)
+            st.subheader(VI_STRINGS["financial_income"])
+            st.markdown(df_income.style.hide(axis="index").to_html(), unsafe_allow_html=True)
+
+        # Financial Ratios
+        with finance_ratio_ph.container():
+            st.markdown("&nbsp;", unsafe_allow_html=True)
+            st.subheader(VI_STRINGS["financial_ratio"])         
+            st.markdown(df_ratio.style.hide(axis="index").to_html(), unsafe_allow_html=True)
 
         # Dividend
         with dividend_ph.container():
             st.markdown("&nbsp;", unsafe_allow_html=True)
             st.subheader(VI_STRINGS["dividend_history"])
-
-            rename_map = {
-                "exercise_date": VI_STRINGS["exercise_date"],
-                "cash_year": VI_STRINGS["cash_year"],
-                "cash_dividend_percentage": VI_STRINGS["cash_dividend_percentage"],
-                "issue_method": VI_STRINGS["issue_method"],
-            }
-
-            df_div_renamed = df_div.rename(columns=rename_map)
-
-            st.markdown(df_div_renamed.style.hide(axis="index").to_html(), unsafe_allow_html=True)
+            st.markdown(df_div.style.hide(axis="index").to_html(), unsafe_allow_html=True)
 
         # AI Analysis (conditional)
         if ai_enabled:
