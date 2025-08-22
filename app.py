@@ -214,8 +214,8 @@ def render_dashboard(symbol: str, ai_enabled: bool = False):
                     industry_news={},
                     company_news={},
                     pe_industry_avg=10,
-                    json_financial=df_div.to_json(orient="records", indent=2),
-                    json_dividend=df_fin.to_json(orient="records", indent=2)
+                    json_financial_income=df_income.to_json(orient="records", indent=2),
+                    json_dividend=df_div.to_json(orient="records", indent=2)
                 )
                 response = run_completion(final_prompt)
                 st.write(response)

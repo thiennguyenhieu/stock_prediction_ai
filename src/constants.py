@@ -77,7 +77,7 @@ THÔNG TIN CÔNG TY:
 - P/E ngành trung bình: {pe_industry_avg}  
 
 ĐẦU VÀO:  
-- Báo cáo tài chính (JSON): {json_financial}  
+- Báo cáo lãi lỗ (JSON): {json_financial_income}  
 - Lịch sử cổ tức (JSON): {json_dividend}  
 - Tin tức ngành/công ty: {industry_news} {company_news}  
 
