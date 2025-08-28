@@ -1,17 +1,20 @@
-# CNN-BiLSTM v2: 14-day horizon + leakage fixes + stable metrics
-# - Fixes direction label extraction in generator (no future-row leak)
-# - Train/val split with purge gap and scalers fit ONLY on train
-# - Proper inverse_transform for (N,H) arrays
-# - Gradient clipping, better callbacks/monitors
-# - Keeps v1 architecture for apples-to-apples comparison
+# src/train_historical_model_v2_returns.py
+# CNN-LSTM for 14-day forecasting using MULTI-STEP LOG-RETURNS as target.
+# - Fits scalers on TRAIN ONLY (no leakage)
+# - Targets: ret_t1..ret_tH (StandardScaler)
+# - Direction labels from returns > 0 (same horizon)
+# - Saves raw-space MAE per horizon by reconstructing prices from returns
 
 import os
 import sys
 import json
-import random
+import joblib
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from sklearn.metrics import mean_absolute_error, accuracy_score
 
 import tensorflow as tf
 from tensorflow.keras.models import Model
@@ -21,83 +24,66 @@ from tensorflow.keras.utils import Sequence
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import Huber
 
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_absolute_error, accuracy_score
-import joblib
-
-# -----------------------------------------------------------------------------
-# Project setup
-# -----------------------------------------------------------------------------
+# ----- Project imports -----
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from src.constants import *  # expects COL_CLOSE, COL_TIME, etc.
+from src.constants import *
 
-# Repro
-np.random.seed(42)
-random.seed(42)
-tf.random.set_seed(42)
-
-# GPU mem growth
-for device in tf.config.list_physical_devices('GPU'):
+# GPU growth
+for dev in tf.config.list_physical_devices('GPU'):
     try:
-        tf.config.experimental.set_memory_growth(device, True)
+        tf.config.experimental.set_memory_growth(dev, True)
     except Exception:
         pass
 
-# -----------------------------------------------------------------------------
-# Hyperparams
-# -----------------------------------------------------------------------------
+# ----- Config -----
 INPUT_SEQ_LEN = 180
 FORECAST_HORIZON = 14
 EPOCHS = 50
 BATCH_SIZE = 32
-VERSION_TAG = "v2_close_regression_leakfix"
+VERSION_TAG = "v2_returns_h14_noleak"
 MODEL_OUTPUT_DIR = os.path.join("models", "cnn_lstm_close_regression", VERSION_TAG)
+os.makedirs(MODEL_OUTPUT_DIR, exist_ok=True)
 
-# -----------------------------------------------------------------------------
-# Data sequence (fixed y_dir extraction)
-# -----------------------------------------------------------------------------
+# ----- Data Generator -----
 class SequenceGenerator(Sequence):
-    def __init__(self, df, input_seq_len, feature_cols, target_col, forecast_horizon, batch_size=32):
-        self.df = df
+    """
+    Generates (X, y) pairs for multi-step forecasting.
+    y has two heads:
+      - 'forecast_close': here means returns target (ret_t1..ret_tH) scaled -> shape (batch, H)
+      - 'direction_classifier': binary (ret > 0) -> shape (batch, H)
+    """
+    def __init__(self, df_scaled, input_seq_len, feature_cols, ret_cols, dir_cols, batch_size=32):
+        self.df = df_scaled
         self.input_seq_len = input_seq_len
         self.feature_cols = feature_cols
-        self.target_col = target_col
-        self.forecast_horizon = forecast_horizon
+        self.ret_cols = ret_cols
+        self.dir_cols = dir_cols
         self.batch_size = batch_size
-        dir_cols = [f"direction_t{i}" for i in range(1, forecast_horizon + 1)]
-        self.data = df[feature_cols + [target_col] + dir_cols].values.astype(np.float32)
+
         self.n_features = len(feature_cols)
-        self.indices = np.arange(len(self.data) - input_seq_len - forecast_horizon + 1)
+        # indices produce windows ending at t and targets t+1..t+H
+        self.indices = np.arange(len(self.df) - input_seq_len - len(ret_cols) + 1)
+
+        sel = self.feature_cols + self.ret_cols + self.dir_cols
+        self.data = self.df[sel].values.astype(np.float32)
 
     def __len__(self):
         return int(np.ceil(len(self.indices) / self.batch_size))
 
     def __getitem__(self, idx):
-        batch_indices = self.indices[idx * self.batch_size:(idx + 1) * self.batch_size]
-        X = np.zeros((len(batch_indices), self.input_seq_len, self.n_features), dtype=np.float32)
-        y_close = np.zeros((len(batch_indices), self.forecast_horizon), dtype=np.float32)
-        y_dir = np.zeros((len(batch_indices), self.forecast_horizon), dtype=np.float32)
+        bi = self.indices[idx * self.batch_size:(idx + 1) * self.batch_size]
+        X = np.zeros((len(bi), self.input_seq_len, self.n_features), dtype=np.float32)
+        y_ret = np.zeros((len(bi), len(self.ret_cols)), dtype=np.float32)
+        y_dir = np.zeros((len(bi), len(self.dir_cols)), dtype=np.float32)
 
-        for i, start_idx in enumerate(batch_indices):
-            in_start = start_idx
-            in_end   = start_idx + self.input_seq_len
-            out_end  = in_end + self.forecast_horizon
+        for i, s in enumerate(bi):
+            X[i] = self.data[s:s + self.input_seq_len, :self.n_features]
+            y_ret[i] = self.data[s + self.input_seq_len:s + self.input_seq_len + len(self.ret_cols), self.n_features:self.n_features + len(self.ret_cols)]
+            y_dir[i] = self.data[s + self.input_seq_len:s + self.input_seq_len + len(self.dir_cols), self.n_features + len(self.ret_cols):]
 
-            # inputs
-            X[i] = self.data[in_start:in_end, :self.n_features]
-            # future close targets across next H rows
-            y_close[i] = self.data[in_end:out_end, self.n_features]
-            # direction labels come from the anchor row (in_end - 1), spread across columns
-            anchor_row = in_end - 1
-            dir_col_start = self.n_features + 1
-            dir_col_end   = dir_col_start + self.forecast_horizon
-            y_dir[i] = self.data[anchor_row, dir_col_start:dir_col_end]
+        return X, {"forecast_close": y_ret, "direction_classifier": y_dir}
 
-        return X, {"forecast_close": y_close, "direction_classifier": y_dir}
-
-# -----------------------------------------------------------------------------
-# Model (same as v1, tiny stability tweaks)
-# -----------------------------------------------------------------------------
+# ----- Model -----
 def build_model(input_shape, forecast_horizon):
     inputs = Input(shape=input_shape)
     x = Conv1D(64, 3, activation='relu')(inputs)
@@ -107,208 +93,220 @@ def build_model(input_shape, forecast_horizon):
     x = LSTM(64, return_sequences=True)(x)
     x = Dropout(0.3)(x)
 
-    attention = Dense(1, activation='tanh')(x)
-    attention_weights = tf.nn.softmax(attention, axis=1)
-    context = tf.reduce_sum(x * attention_weights, axis=1)
+    # simple attention
+    att = Dense(1, activation='tanh')(x)
+    att_w = tf.nn.softmax(att, axis=1)
+    context = tf.reduce_sum(x * att_w, axis=1)
 
     context = Dense(64, activation='relu')(context)
     context = Dropout(0.2)(context)
     context = LayerNormalization()(context)
 
-    forecast_output = Dense(forecast_horizon, name="forecast_close")(context)
-    direction_output = Dense(forecast_horizon, name="direction_classifier", activation="sigmoid")(context)
+    out_ret = Dense(forecast_horizon, name="forecast_close")(context)  # returns
+    out_dir = Dense(forecast_horizon, name="direction_classifier", activation="sigmoid")(context)
 
-    model = Model(inputs, [forecast_output, direction_output])
+    model = Model(inputs, [out_ret, out_dir])
     model.compile(
-        optimizer=Adam(learning_rate=1e-3, clipnorm=1.0),  # clip for stability
-        loss={
-            "forecast_close": Huber(delta=0.5),  # slightly tighter than default
-            "direction_classifier": "binary_crossentropy",
-        },
-        loss_weights={
-            "forecast_close": 1.0,
-            "direction_classifier": 0.5,
-        },
-        metrics={
-            "forecast_close": "mae",
-            "direction_classifier": [
-                tf.keras.metrics.BinaryAccuracy(name="accuracy", threshold=0.5),
-                tf.keras.metrics.AUC(curve="ROC", name="auc"),
-            ],
-        },
+        optimizer=Adam(1e-3),
+        loss={"forecast_close": Huber(), "direction_classifier": "binary_crossentropy"},
+        loss_weights={"forecast_close": 1.0, "direction_classifier": 0.5},
+        metrics={"forecast_close": "mae", "direction_classifier": "accuracy"},
     )
     return model
 
-# -----------------------------------------------------------------------------
-# Helpers
-# -----------------------------------------------------------------------------
-def inv_minmax_expm1(mat: np.ndarray, scaler: MinMaxScaler) -> np.ndarray:
-    """Inverse MinMax on a (N,H) array that was fit on 1-D, then expm1, preserving shape."""
-    original_shape = mat.shape
-    flat = mat.reshape(-1, 1)
-    inv = scaler.inverse_transform(flat)
-    inv = np.expm1(inv)
-    return inv.reshape(original_shape)
-
-# -----------------------------------------------------------------------------
-# Main
-# -----------------------------------------------------------------------------
+# ----- Training pipeline -----
 def main():
     df = pd.read_csv('data/historical_data_final.csv')
+    df = df.sort_values(COL_TIME).reset_index(drop=True)
 
-    # Build direction labels relative to each row's close
-    for i in range(1, FORECAST_HORIZON + 1):
-        df[f"direction_t{i}"] = (df[COL_CLOSE].shift(-i) > df[COL_CLOSE]).astype(int)
+    # keep a raw close column for later reconstruction
+    df["close_raw"] = df[COL_CLOSE].astype(float)
+    df["logp"] = np.log(df[COL_CLOSE].astype(float))
 
-    # Basic engineered features used in v1
+    H = FORECAST_HORIZON
+
+    # Multi-step returns (log space): log(C_{t+h}) - log(C_t)
+    ret_cols = []
+    for h in range(1, H + 1):
+        col = f"ret_t{h}"
+        df[col] = df["logp"].shift(-h) - df["logp"]
+        ret_cols.append(col)
+
+    # Direction labels per horizon (returns > 0)
+    dir_cols = []
+    for h in range(1, H + 1):
+        col = f"direction_t{h}"
+        df[col] = (df[f"ret_t{h}"] > 0).astype(int)
+        dir_cols.append(col)
+
+    # Feature engineering (parity with your previous setup)
     df["delta_close"] = df[COL_CLOSE].diff()
     for lag in range(1, 31):
         df[f"lag_close_{lag}"] = df[COL_CLOSE].shift(lag)
 
-    df.dropna(inplace=True)
+    # Drop NA from shifts/targets
+    df = df.dropna().reset_index(drop=True)
 
-    target_col = COL_CLOSE
-    dir_cols = [f"direction_t{i}" for i in range(1, FORECAST_HORIZON + 1)]
-    input_features = [c for c in df.columns if c not in [target_col] + dir_cols]
+    # Input features exclude all targets/labels
+    input_features = [c for c in df.columns if c not in ["close_raw", "logp"] + ret_cols + dir_cols]
 
-    # Chronological split + purge to avoid leakage across the boundary
-    split_idx = int(len(df) * 0.8)
-    purge = FORECAST_HORIZON
-    train_end = max(split_idx - purge, INPUT_SEQ_LEN + FORECAST_HORIZON)
-    df_train = df.iloc[:train_end].copy()
-    df_val   = df.iloc[split_idx:].copy()
+    # Chronological split (train-only fit)
+    train_size = int(len(df) * 0.8)
+    df_train = df.iloc[:train_size].copy()
+    df_val   = df.iloc[train_size:].copy()
 
-    # Scale on TRAIN only, apply to VAL
-    # Order: log1p target -> fit MinMax -> transform both
-    df_train[target_col] = np.log1p(df_train[target_col])
-    df_val[target_col]   = np.log1p(df_val[target_col])
-
+    # Fit scalers on TRAIN ONLY
     scaler_X = MinMaxScaler()
-    scaler_y = MinMaxScaler()
+    scaler_ret = StandardScaler()
 
     df_train[input_features] = scaler_X.fit_transform(df_train[input_features])
     df_val[input_features]   = scaler_X.transform(df_val[input_features])
 
-    df_train[target_col] = scaler_y.fit_transform(df_train[[target_col]])
-    df_val[target_col]   = scaler_y.transform(df_val[[target_col]])
+    df_train[ret_cols] = scaler_ret.fit_transform(df_train[ret_cols])
+    df_val[ret_cols]   = scaler_ret.transform(df_val[ret_cols])
+
+    # Save scalers
+    joblib.dump(scaler_X, os.path.join(MODEL_OUTPUT_DIR, "scaler_X.pkl"))
+    joblib.dump(scaler_ret, os.path.join(MODEL_OUTPUT_DIR, "scaler_ret.pkl"))
 
     # Generators
-    train_gen = SequenceGenerator(df_train, INPUT_SEQ_LEN, input_features, target_col, FORECAST_HORIZON, batch_size=BATCH_SIZE)
-    val_gen   = SequenceGenerator(df_val,   INPUT_SEQ_LEN, input_features, target_col, FORECAST_HORIZON, batch_size=BATCH_SIZE)
+    train_gen = SequenceGenerator(df_train, INPUT_SEQ_LEN, input_features, ret_cols, dir_cols, batch_size=BATCH_SIZE)
+    val_gen   = SequenceGenerator(df_val,   INPUT_SEQ_LEN, input_features, ret_cols, dir_cols, batch_size=BATCH_SIZE)
 
-    # Build & train
-    os.makedirs(MODEL_OUTPUT_DIR, exist_ok=True)
-    model = build_model((INPUT_SEQ_LEN, len(input_features)), FORECAST_HORIZON)
-
+    # Model
+    model = build_model((INPUT_SEQ_LEN, len(input_features)), H)
     history = model.fit(
         train_gen,
         validation_data=val_gen,
         epochs=EPOCHS,
-        callbacks=[
-            ReduceLROnPlateau(monitor="val_forecast_close_mae", factor=0.5, patience=8, min_lr=1e-6, verbose=1),
-            EarlyStopping(monitor="val_loss", patience=16, restore_best_weights=True, verbose=1),
-        ],
-        verbose=1,
+        callbacks=[ReduceLROnPlateau(factor=0.5, patience=10), EarlyStopping(patience=20, restore_best_weights=True)],
+        verbose=1
     )
 
-    # Save training history
+    # Save training curves (note: losses/mae are on scaled returns)
     with open(os.path.join(MODEL_OUTPUT_DIR, "training_history.json"), "w") as f:
-        json.dump({k: [float(vv) for vv in v] for k, v in history.history.items()}, f, indent=4)
+        json.dump({k: [float(vv) for vv in v] for k, v in history.history.items()}, f, indent=2)
 
-    # Plots
-    fig, axs = plt.subplots(2, 1, figsize=(10, 8))
-    axs[0].plot(history.history['forecast_close_mae'], label='Train Forecast MAE')
-    axs[0].plot(history.history['val_forecast_close_mae'], label='Val Forecast MAE')
-    axs[0].set_title("Forecast Close MAE")
-    axs[0].legend(); axs[0].grid(True)
+    # ----- Offline evaluation in RAW PRICE space -----
+    # We reconstruct price paths using the last close at the end of each input window.
 
-    axs[1].plot(history.history['direction_classifier_accuracy'], label='Train Dir Acc')
-    axs[1].plot(history.history['val_direction_classifier_accuracy'], label='Val Dir Acc')
-    if 'direction_classifier_auc' in history.history and 'val_direction_classifier_auc' in history.history:
-        axs[1].plot(history.history['direction_classifier_auc'], label='Train AUC', linestyle='--')
-        axs[1].plot(history.history['val_direction_classifier_auc'], label='Val AUC', linestyle='--')
-    axs[1].set_title("Direction Classifier Metrics")
-    axs[1].legend(); axs[1].grid(True)
+    # Recreate the same window indices used by the val generator
+    idxs = np.arange(len(df_val) - INPUT_SEQ_LEN - H + 1)
+    n_batches = int(np.ceil(len(idxs) / BATCH_SIZE))
 
-    plt.tight_layout()
-    plt.savefig(os.path.join(MODEL_OUTPUT_DIR, "training_history.png"))
-    plt.close()
+    y_true_paths = []
+    y_pred_paths = []
+    y_true_dir_all = []
+    y_pred_dir_logits_all = []
 
-    # ---------------- Evaluation on VAL ----------------
-    y_true_close, y_pred_close = [], []
-    y_true_dir,   y_pred_dir   = [], []
+    for b in range(n_batches):
+        bi = idxs[b * BATCH_SIZE:(b + 1) * BATCH_SIZE]
+        if len(bi) == 0:
+            continue
 
-    for i in range(len(val_gen)):
-        X_batch, y_batch = val_gen[i]
-        preds = model.predict(X_batch, verbose=0)
-        y_true_close.append(y_batch["forecast_close"])  # (B,H)
-        y_pred_close.append(preds[0])                    # (B,H)
-        y_true_dir.append(y_batch["direction_classifier"])  # (B,H)
-        y_pred_dir.append(preds[1])                          # (B,H)
+        # X batch (scaled)
+        X = np.zeros((len(bi), INPUT_SEQ_LEN, len(input_features)), dtype=np.float32)
 
-    y_true_close = np.concatenate(y_true_close, axis=0)
-    y_pred_close = np.concatenate(y_pred_close, axis=0)
-    y_true_dir   = np.concatenate(y_true_dir, axis=0)
-    y_pred_dir   = np.concatenate(y_pred_dir, axis=0)
+        # collect ground truth returns (scaled) and directions for these windows
+        true_rets_scaled = np.zeros((len(bi), H), dtype=np.float32)
+        true_dirs = np.zeros((len(bi), H), dtype=np.float32)
+        last_closes = np.zeros((len(bi),), dtype=np.float32)
 
-    # Inverse target scaling properly
-    y_true_close = inv_minmax_expm1(y_true_close, scaler_y)
-    y_pred_close = inv_minmax_expm1(y_pred_close, scaler_y)
+        for i, s in enumerate(bi):
+            rows = df_val.iloc[s:s + INPUT_SEQ_LEN]
+            X[i] = rows[input_features].values.astype(np.float32)
 
-    # Direction metrics
-    y_pred_dir_binary = (y_pred_dir >= 0.5).astype(int)
+            # ground truth returns for this window (scaled)
+            tgt_rows = df_val.iloc[s + INPUT_SEQ_LEN:s + INPUT_SEQ_LEN + H]
+            true_rets_scaled[i] = tgt_rows[ret_cols].values.astype(np.float32).ravel()
+            true_dirs[i] = tgt_rows[dir_cols].values.astype(np.float32).ravel()
 
-    mae = float(round(mean_absolute_error(y_true_close.flatten(), y_pred_close.flatten()), 4))
-    acc = float(round(accuracy_score(y_true_dir.flatten(), y_pred_dir_binary.flatten()), 4))
+            # last close at t (end of input window)
+            last_closes[i] = float(df_val.iloc[s + INPUT_SEQ_LEN - 1]["close_raw"])
 
+        # predict scaled returns + direction logits
+        pred_rets_scaled, pred_dir_logits = model.predict(X, verbose=0)
+
+        # inverse-transform returns
+        true_rets = scaler_ret.inverse_transform(true_rets_scaled)
+        pred_rets = scaler_ret.inverse_transform(pred_rets_scaled)
+
+        # reconstruct prices from returns
+        # log path: log(C_t) + cumsum(ret_t+1..t+H)
+        last_logp = np.log(last_closes)
+        true_log_paths = last_logp[:, None] + np.cumsum(true_rets, axis=1)
+        pred_log_paths = last_logp[:, None] + np.cumsum(pred_rets, axis=1)
+        true_prices = np.exp(true_log_paths)
+        pred_prices = np.exp(pred_log_paths)
+
+        y_true_paths.append(true_prices)
+        y_pred_paths.append(pred_prices)
+        y_true_dir_all.append(true_dirs)
+        y_pred_dir_logits_all.append(pred_dir_logits)
+
+    if len(y_true_paths):
+        y_true_paths = np.vstack(y_true_paths)
+        y_pred_paths = np.vstack(y_pred_paths)
+        y_true_dir_all = np.vstack(y_true_dir_all)
+        y_pred_dir_logits_all = np.vstack(y_pred_dir_logits_all)
+
+        # Overall raw MAE across all horizons
+        mae_raw_overall = float(round(mean_absolute_error(y_true_paths.flatten(), y_pred_paths.flatten()), 4))
+
+        # MAE per horizon
+        mae_by_step = {f"t+{i+1}": float(round(mean_absolute_error(y_true_paths[:, i], y_pred_paths[:, i]), 4))
+                       for i in range(H)}
+
+        # Direction accuracy
+        y_pred_dir_bin = (y_pred_dir_logits_all >= 0.5).astype(int)
+        acc_overall = float(round(accuracy_score(y_true_dir_all.flatten(), y_pred_dir_bin.flatten()), 4))
+        acc_by_step = {f"t+{i+1}": float(round(accuracy_score(y_true_dir_all[:, i], y_pred_dir_bin[:, i]), 4))
+                       for i in range(H)}
+    else:
+        mae_raw_overall = None
+        mae_by_step = {}
+        acc_overall = None
+        acc_by_step = {}
+
+    # Save eval artifacts
     with open(os.path.join(MODEL_OUTPUT_DIR, "forecast_mae.json"), "w") as f:
-        json.dump({"forecast_close_mae": mae}, f, indent=4)
+        json.dump({"forecast_close_mae": mae_raw_overall}, f, indent=2)
+
+    with open(os.path.join(MODEL_OUTPUT_DIR, "forecast_mae_by_step.json"), "w") as f:
+        json.dump(mae_by_step, f, indent=2)
 
     with open(os.path.join(MODEL_OUTPUT_DIR, "direction_accuracy.json"), "w") as f:
-        json.dump({"overall_accuracy": acc}, f, indent=4)
+        json.dump({"overall_accuracy": acc_overall}, f, indent=2)
 
-    acc_by_step = {f"t+{i+1}": float(round(accuracy_score(y_true_dir[:, i], y_pred_dir_binary[:, i]), 4)) for i in range(FORECAST_HORIZON)}
     with open(os.path.join(MODEL_OUTPUT_DIR, "direction_accuracy_by_step.json"), "w") as f:
-        json.dump(acc_by_step, f, indent=4)
+        json.dump(acc_by_step, f, indent=2)
 
-    # Training summary
-    with open(os.path.join(MODEL_OUTPUT_DIR, "training_summary.txt"), "w") as f:
-        f.write(f"Best Train Forecast MAE: {min(history.history['forecast_close_mae']):.4f}\n")
-        f.write(f"Best Val Forecast MAE: {min(history.history['val_forecast_close_mae']):.4f}\n")
-        f.write(f"Best Train Dir Acc: {max(history.history['direction_classifier_accuracy']):.4f}\n")
-        f.write(f"Best Val Dir Acc: {max(history.history['val_direction_classifier_accuracy']):.4f}\n")
-        if 'direction_classifier_auc' in history.history and 'val_direction_classifier_auc' in history.history:
-            f.write(f"Best Train Dir AUC: {max(history.history['direction_classifier_auc']):.4f}\n")
-            f.write(f"Best Val Dir AUC: {max(history.history['val_direction_classifier_auc']):.4f}\n")
-
-    # Save artifacts
+    # Save model & metadata
     model.save(os.path.join(MODEL_OUTPUT_DIR, "cnn_lstm_forecast_model.keras"))
-    joblib.dump(scaler_X, os.path.join(MODEL_OUTPUT_DIR, "scaler_X.pkl"))
-    joblib.dump(scaler_y, os.path.join(MODEL_OUTPUT_DIR, "scaler_y.pkl"))
-
     with open(os.path.join(MODEL_OUTPUT_DIR, "metadata.json"), "w") as f:
         json.dump({
             "input_features": input_features,
-            "target_col": target_col,
+            "target_kind": "log_returns",
+            "ret_cols": ret_cols,
+            "dir_cols": dir_cols,
             "input_seq_len": INPUT_SEQ_LEN,
             "forecast_horizon": FORECAST_HORIZON,
             "version": VERSION_TAG,
-        }, f, indent=4)
+            "scalers_fit_scope": "train_only",
+            "scalers": {"X": "MinMaxScaler", "returns": "StandardScaler"}
+        }, f, indent=2)
 
-    # Quick horizon snapshots
-    for i in [1, 7, 14]:
-        if i <= y_true_close.shape[1]:
-            plt.figure(figsize=(10, 4))
-            plt.plot(y_true_close[:, i - 1], label=f'True t+{i}')
-            plt.plot(y_pred_close[:, i - 1], label=f'Pred t+{i}')
-            plt.title(f"Close Price Forecast (t+{i})")
-            plt.legend(); plt.grid(True)
-            plt.tight_layout()
-            plt.savefig(os.path.join(MODEL_OUTPUT_DIR, f"forecast_t{i}.png"))
-            plt.close()
-
-    print("v2 training complete →", MODEL_OUTPUT_DIR)
-
+    # Quick diagnostic plots in raw space (t+1,t+7,t+14)
+    if len(y_true_paths):
+        for i in [1, 7, 14]:
+            if i <= y_true_paths.shape[1]:
+                plt.figure(figsize=(10, 4))
+                plt.plot(y_true_paths[:, i - 1], label=f"True t+{i}")
+                plt.plot(y_pred_paths[:, i - 1], label=f"Pred t+{i}")
+                plt.title(f"Close Forecast (t+{i}) – RAW")
+                plt.legend(); plt.grid(True); plt.tight_layout()
+                plt.savefig(os.path.join(MODEL_OUTPUT_DIR, f"forecast_t{i}_raw.png"))
+                plt.close()
 
 if __name__ == "__main__":
     main()

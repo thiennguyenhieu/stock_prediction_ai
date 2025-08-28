@@ -58,69 +58,32 @@ COL_ATTRIBUTE_YOY = 'Attribute to parent company YoY (%)'
 ENCODER_PATH = "data/symbol_encoder.pkl"
 
 PROMPT_TEMPLATE = """
-Bạn là CHUYÊN GIA PHÂN TÍCH TÀI CHÍNH.  
-Nhiệm vụ: Viết báo cáo ngắn gọn, có luận điểm rõ ràng, dựa trên dữ liệu JSON.  
+Bạn là chuyên gia phân tích chứng khoán.  
+Dựa trên dữ liệu đầu vào (Tên, Mã, Ngành, Giá hiện tại, Income, Ratios, Balance sheet, Cổ tức), hãy:
 
-QUY TẮC BẮT BUỘC:  
-- Văn bản thuần, không HTML.  
-- Mỗi mục ≤ 6 dòng, súc tích.  
-- Không liệt kê số liệu từng quý; chỉ đưa số **tổng hợp** (4 quý, 2 quý + dự phóng).  
-- TÍNH TOÁN chính xác từ JSON, KHÔNG tự bịa số liệu.  
-- Các chỉ số quan trọng viết IN HOA hoặc **đậm**: DOANH THU, LNST, EPS TTM, EPS DỰ PHÓNG, GIÁ HỢP LÝ, KHUYẾN NGHỊ.  
+1. Giới thiệu ngắn về công ty.  
+2. Tin tức ngành & công ty ảnh hưởng đến doanh thu.  
+3. Tóm tắt KQKD gần nhất: Doanh thu, LNST, EPS, ROE/ROA; phân tích vốn CSH, nợ, đòn bẩy.  
+4. Dự phóng LNST & EPS cho 1 quý và 2 quý tới, kèm lý do.  
+5. Định giá: so sánh giá hiện tại với giá hợp lý (EPS dự phóng × P/E TB ngành + P/B).  
+6. Khuyến nghị: MUA / BÁN / GIỮ.  
 
-THÔNG TIN CÔNG TY:  
+Trình bày ngắn gọn, rõ ràng, dễ đọc cho nhà đầu tư.
+
+ĐẦU VÀO
 - Tên: {company_name}  
 - Mã: {ticker}  
 - Ngành: {industry}  
-- Số CP lưu hành: {issue_share}  
-- Giá hiện tại: {current_price}  
-- P/E ngành trung bình: {pe_industry_avg}  
-
-ĐẦU VÀO:  
-- Báo cáo lãi lỗ (JSON): {json_financial_income}  
-- Lịch sử cổ tức (JSON): {json_dividend}  
-- Tin tức ngành/công ty: {industry_news} {company_news}  
-
-CẤU TRÚC BÁO CÁO:  
-
-1) Mô hình kinh doanh & ngành  
-- Nêu nguồn doanh thu chính, lợi thế cạnh tranh, rủi ro ngành.  
-
-2) Tin tức & chính sách ngành  
-- Tóm lược 2–3 tin tức/chính sách mới nhất.  
-- Nếu thiếu tin tức: nêu cơ hội và rủi ro ngành nguyên lý.  
-
-3) Kết quả kinh doanh 4 quý gần nhất  
-- Đưa số tổng hợp: **DOANH THU**, **LNST**.  
-- Nhận xét xu hướng: tăng/giảm/ổn định.  
-- Nêu yếu tố chính: biên lợi nhuận, nợ vay, dòng tiền.  
-
-4) Dự báo 2 quý tới  
-- Giả định then chốt.  
-- Trình bày 3 kịch bản (Base, Best, Worst).  
-- Mỗi kịch bản: **DOANH THU dự phóng**, **LNST dự phóng** (2 số, làm tròn) + xu hướng.  
-
-5) Định giá  
-- Tính từ JSON:  
-  + **LNST 4 quý gần nhất**  
-  + **LNST 2 quý gần nhất + 2 quý dự báo**  
-  + **EPS TTM**  
-  + **EPS DỰ PHÓNG**  
-  + **GIÁ HỢP LÝ (Base case)** = EPS DỰ PHÓNG × P/E ngành {pe_industry_avg}  
-- So sánh với {current_price}.  
-
-6) Khuyến nghị  
-- Đưa ra **KHUYẾN NGHỊ: MUA / GIỮ / BÁN** dựa trên chênh lệch GIÁ HỢP LÝ vs {current_price}.  
-- Nêu rõ giá mục tiêu (Base case).  
-- Xác định vùng stop-loss = 8–12% dưới giá mua (giá hiện tại).  
-
-7) Tổng kết  
-- Tóm tắt 3 ý: xu hướng kinh doanh, định giá, hành động khuyến nghị.  
+- Giá hiện tại: {current_price}   
+- Income: {json_financial_income}  
+- Ratios: {json_financial_ratio}  
+- Balance sheet: {json_financial_balance_sheet}  
+- Cổ tức: {json_dividend}
 """
 
 VI_STRINGS = {
     "app_title": "📈 Ứng dụng Phân Tích Cổ phiếu",
-    "sidebar_header": "📊 Thiết lập Cổ phiếu",
+    "sidebar_header": "🗂️ Thiết lập Cổ phiếu",
     "enter_symbol": "Nhập mã cổ phiếu (ví dụ: ACB)",
     "apply_button": "Áp dụng",
     "invalid_symbol_info": "👈 Vui lòng chọn một mã hợp lệ gồm 3 ký tự và nhấn **Áp dụng**.",
@@ -128,11 +91,12 @@ VI_STRINGS = {
     "loading_spinner": "⏳ Đang tải và phân tích dữ liệu cổ phiếu...",
     "industry": "**Ngành nghề:** {industry}",
     "shares_outstanding": "**Số cổ phiếu đang lưu hành:** {shares_outstanding:,}",
-    "price_forecast": "📉 Dự báo giá cho 14 ngày tới",
+    "price_forecast": "🔮 Dự báo giá cho 14 ngày tới (chỉ mang tính chất tham khảo)",
     "dividend_history": "💸 Lịch sử Cổ tức",
-    "financial_income": "📑 Báo cáo lãi lỗ",
+    "financial_income": "💹 Báo cáo lãi lỗ",
     "financial_ratio": "📊 Chỉ số tài chính",
-    "ai_analysis": "📊 Phân tích Cổ phiếu bằng AI",
+    "financial_balance_sheet": "📒 Bảng cân đối kế toán",
+    "ai_analysis": "🤖 Phân tích Cổ phiếu bằng AI",
     "no_recent_price": "Không có dữ liệu giá gần đây.",
     "col_date": "Ngày",
     "col_close_price": "Giá đóng cửa",

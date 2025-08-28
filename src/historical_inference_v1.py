@@ -1,5 +1,6 @@
 # Updated inference script for CNN-LSTM Close Forecasting
 import os
+import sys
 import json
 import joblib
 import numpy as np
@@ -7,6 +8,7 @@ import pandas as pd
 from pandas.tseries.offsets import BDay
 from datetime import date
 from tensorflow.keras.models import load_model
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.constants import *
 from src.fetch_historical_data import process_symbol, post_process_data
 
@@ -49,49 +51,61 @@ def get_close_prediction(symbol: str, interval: int) -> pd.DataFrame:
 def predict_close_price_series(raw_df: pd.DataFrame, forecast_steps: int = 5, debug: bool = False) -> pd.DataFrame:
     model, scaler_X, scaler_y, metadata = load_artifacts()
     input_features = metadata["input_features"]
-    target_col = metadata["target_col"]
     seq_len = metadata["input_seq_len"]
 
-    # --- Feature Engineering for Inference ---
+    # --- Feature Engineering for Inference (RAW space) ---
+    df_raw = raw_df.copy()
     for lag in range(1, 31):
-        raw_df[f"lag_close_{lag}"] = raw_df[COL_CLOSE].shift(lag)
-    raw_df["delta_close"] = raw_df[COL_CLOSE].diff()
-    raw_df.dropna(inplace=True)
+        df_raw[f"lag_close_{lag}"] = df_raw[COL_CLOSE].shift(lag)
+    df_raw["delta_close"] = df_raw[COL_CLOSE].diff()
+    df_raw.dropna(inplace=True)
 
-    if debug:
-        print("\nForecasting", forecast_steps, "steps")
-        print("Input shape:", (seq_len, len(input_features)))
-        print("Target:", target_col)
-        print("Scaler y range:", scaler_y.data_min_, "→", scaler_y.data_max_)
-
-    missing = [f for f in input_features if f not in raw_df.columns]
+    missing = [f for f in input_features if f not in df_raw.columns]
     if missing:
         raise ValueError(f"Missing input features: {missing}")
-    if len(raw_df) < seq_len:
-        raise ValueError(f"Not enough rows for prediction sequence. Needed: {seq_len}, Got: {len(raw_df)}")
+    if len(df_raw) < seq_len:
+        raise ValueError(f"Not enough rows: need {seq_len}, have {len(df_raw)}")
 
-    scaled_df = raw_df.copy()
-    scaled_df[input_features] = scaler_X.transform(scaled_df[input_features])
-    sequence = scaled_df[input_features].iloc[-seq_len:].values.astype(np.float32)
+    # --- Make scaled window for the model ---
+    df_scaled = df_raw.copy()
+    df_scaled[input_features] = scaler_X.transform(df_scaled[input_features])
+    sequence = df_scaled[input_features].iloc[-seq_len:].values.astype(np.float32)
+
+    # We'll also keep the last UNscaled feature row to update lags/delta each step
+    last_raw_row = df_raw[input_features].iloc[-1].copy()
 
     predictions = []
     for step in range(forecast_steps):
         X_input = sequence.reshape(1, seq_len, len(input_features))
-        y_close, y_dir = model.predict(X_input, verbose=0)
+        y_close_scaled, _ = model.predict(X_input, verbose=0)  # y_close_scaled shape: (1, 1) for v1 head step0
+        # Inverse target scaling to RAW close (for output)
+        y_close_log = scaler_y.inverse_transform(y_close_scaled)[0, 0]
+        y_pred_raw = float(np.expm1(y_close_log))
+        predictions.append(y_pred_raw)
 
-        forecast_value = float(np.expm1(scaler_y.inverse_transform(y_close)[0, 0]))
-        predictions.append(forecast_value)
+        # ----- Update lag features in RAW space -----
+        # shift lag_close_k: lag_k <- lag_{k-1}, and set lag_close_1 = predicted_close
+        for lag in range(30, 1, -1):
+            col = f"lag_close_{lag}"
+            prev_col = f"lag_close_{lag-1}"
+            if col in last_raw_row and prev_col in last_raw_row:
+                last_raw_row[col] = last_raw_row[prev_col]
+        if "lag_close_1" in last_raw_row:
+            last_raw_row["lag_close_1"] = y_pred_raw
+
+        # recompute delta_close = lag1 - lag2 if both exist
+        if "delta_close" in last_raw_row and "lag_close_1" in last_raw_row and "lag_close_2" in last_raw_row:
+            last_raw_row["delta_close"] = last_raw_row["lag_close_1"] - last_raw_row["lag_close_2"]
+
+        # scale the UPDATED raw row to build next sequence row
+        new_row_scaled = scaler_X.transform(pd.DataFrame([last_raw_row], columns=input_features))[0]
+        sequence = np.vstack([sequence[1:], new_row_scaled.astype(np.float32)])
 
         if debug:
-            print(f"\nStep {step + 1}")
-            print("  y_scaled:", y_close[0, 0], y_dir[0, 0])
-            print("  forecast_close:", forecast_value)
+            print(f"step {step+1}: pred={y_pred_raw:.4f}, lag1(raw)={last_raw_row.get('lag_close_1', None)}")
 
-        next_input = sequence[-1].copy()
-        if target_col in input_features:
-            idx = input_features.index(target_col)
-            next_input[idx] = y_close[0, 0]
-        sequence = np.vstack([sequence[1:], next_input])
+    return pd.DataFrame(predictions, columns=[COL_CLOSE])
 
-    pred_df = pd.DataFrame(predictions, columns=[COL_CLOSE])
-    return pred_df
+if __name__ == "__main__":
+    out = get_close_prediction("SHB", interval=14)
+    print(out)

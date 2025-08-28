@@ -3,7 +3,7 @@ import plotly.graph_objects as go
 import pandas as pd
 
 from src.fetch_historical_data import fetch_recent_price
-from src.fetch_financial_data import fetch_income_statement, fetch_ratio
+from src.fetch_financial_data import fetch_income_statement, fetch_ratio, fetch_balance_sheet
 from src.fetch_general_info import fetch_all_symbols, fetch_company_overview, fetch_dividend
 from src.historical_inference_v1 import get_close_prediction
 from src.stock_analysis import get_completion
@@ -30,6 +30,10 @@ def load_financials_income_statement(symbol: str):
 def load_financials_ratio(symbol: str):
     return fetch_ratio(symbol)
 
+@st.cache_data(show_spinner=False)
+def load_financials_balance_sheet(symbol: str):
+    return fetch_balance_sheet(symbol)
+
 def run_completion(prompt: str):
     return get_completion(prompt)
 
@@ -55,6 +59,7 @@ header_ph    = st.empty()
 chart_ph     = st.empty()
 finance_income_ph = st.empty()
 finance_ratio_ph  = st.empty()
+finance_balance_sheet_ph  = st.empty()
 dividend_ph  = st.empty()
 analysis_ph  = st.empty()
 info_ph      = st.empty()
@@ -70,9 +75,14 @@ with st.sidebar:
     apply_clicked = st.button(VI_STRINGS["apply_button"], type="primary")
 
 def clear_sections():
-    header_ph.empty(); chart_ph.empty()
-    finance_income_ph.empty(); finance_ratio_ph.empty()
-    dividend_ph.empty(); analysis_ph.empty(); info_ph.empty()
+    header_ph.empty()
+    chart_ph.empty()
+    finance_income_ph.empty()
+    finance_ratio_ph.empty()
+    finance_balance_sheet_ph.empty()
+    dividend_ph.empty()
+    analysis_ph.empty()
+    info_ph.empty()
 
 def render_dashboard(symbol: str, ai_enabled: bool = False):
     clear_sections()
@@ -100,6 +110,7 @@ def render_dashboard(symbol: str, ai_enabled: bool = False):
         df_div  = load_dividend(symbol)
         df_income  = load_financials_income_statement(symbol)
         df_ratio = load_financials_ratio(symbol)
+        df_balance_sheet = load_financials_balance_sheet(symbol)
 
         if df_pred is None or df_pred.empty:
             with info_ph:
@@ -120,14 +131,13 @@ def render_dashboard(symbol: str, ai_enabled: bool = False):
         df_pred[COL_TIME] = pd.to_datetime(df_pred[COL_TIME])
 
         exchange, organ_name = get_stock_info_by_symbol(symbol, valid_symbols_with_info)
-        shares_outstanding, industry = fetch_company_overview(symbol)
+        industry = fetch_company_overview(symbol)
 
         # Header
         with header_ph.container():
             st.markdown("&nbsp;", unsafe_allow_html=True)
             st.subheader(f"🏢 {organ_name} ({exchange}: {symbol})")
             st.markdown(VI_STRINGS["industry"].format(industry=industry))
-            st.markdown(VI_STRINGS["shares_outstanding"].format(shares_outstanding=shares_outstanding))
 
         # Chart
         with chart_ph.container():
@@ -194,6 +204,12 @@ def render_dashboard(symbol: str, ai_enabled: bool = False):
             st.subheader(VI_STRINGS["financial_ratio"])         
             st.markdown(df_ratio.style.hide(axis="index").to_html(), unsafe_allow_html=True)
 
+        # Financial Balance sheet
+        with finance_balance_sheet_ph.container():
+            st.markdown("&nbsp;", unsafe_allow_html=True)
+            st.subheader(VI_STRINGS["financial_balance_sheet"])         
+            st.markdown(df_balance_sheet.style.hide(axis="index").to_html(), unsafe_allow_html=True)
+
         # Dividend
         with dividend_ph.container():
             st.markdown("&nbsp;", unsafe_allow_html=True)
@@ -209,13 +225,11 @@ def render_dashboard(symbol: str, ai_enabled: bool = False):
                     company_name=organ_name,
                     ticker=symbol,
                     industry=industry,
-                    issue_share=shares_outstanding,
-                    current_price=df_real[COL_CLOSE].iloc[-1],
-                    industry_news={},
-                    company_news={},
-                    pe_industry_avg=10,
-                    json_financial_income=df_income.to_json(orient="records", indent=2),
-                    json_dividend=df_div.to_json(orient="records", indent=2)
+                    current_price=df_real[COL_CLOSE].iloc[-1] * 1000,
+                    json_financial_income=df_income.to_json(orient="records", indent=2, force_ascii=False),
+                    json_financial_ratio=df_ratio.to_json(orient="records", indent=2, force_ascii=False),
+                    json_financial_balance_sheet=df_balance_sheet.to_json(orient="records", indent=2, force_ascii=False),
+                    json_dividend=df_div.to_json(orient="records", indent=2, force_ascii=False)
                 )
                 response = run_completion(final_prompt)
                 st.write(response)
