@@ -65,7 +65,7 @@ Dựa trên dữ liệu đầu vào (Tên, Mã, Ngành, Giá hiện tại, Incom
 2. Tin tức ngành & công ty ảnh hưởng đến doanh thu.  
 3. Tóm tắt KQKD gần nhất: Doanh thu, LNST, EPS, ROE/ROA; phân tích vốn CSH, nợ, đòn bẩy.  
 4. Dự phóng LNST & EPS cho 1 quý và 2 quý tới, kèm lý do.  
-5. Định giá: so sánh giá hiện tại với giá hợp lý (EPS dự phóng × P/E TB ngành + P/B).  
+5. Định giá: so sánh giá hiện tại với giá hợp lý (EPS dự phóng × P/E TB ngành).  
 6. Khuyến nghị: MUA / BÁN / GIỮ.  
 
 Trình bày ngắn gọn, rõ ràng, dễ đọc cho nhà đầu tư.

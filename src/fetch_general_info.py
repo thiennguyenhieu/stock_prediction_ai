@@ -20,7 +20,7 @@ def fetch_company_overview(symbol: str) -> str:
 
 # --- Company overview ---
 def fetch_dividend(symbol: str) -> pd.DataFrame:
-    df_div = Company('TCBS', symbol).dividends().head(5)
+    df_div = Company('TCBS', symbol).dividends().head(4)
     df_div["cash_dividend_percentage"] = (df_div["cash_dividend_percentage"] * 100).round(2).astype(str) + "%"
     
     issue_map = {

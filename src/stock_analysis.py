@@ -17,7 +17,7 @@ def get_completion(
     """
     Call OpenAI Responses API with instructions + prompt.
     """
-    print(prompt)
+    #print(prompt)
     response = client.responses.create(
         model=model,
         input=prompt,
