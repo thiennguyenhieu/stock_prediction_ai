@@ -1,7 +1,10 @@
+import sys, os
 import pandas as pd
 from vnstock import Listing
 from vnstock import Company
+from vnstock import Screener
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.constants import *
 
 # --- Symbol Listing ---
@@ -37,3 +40,17 @@ def fetch_dividend(symbol: str) -> pd.DataFrame:
     df_div.reset_index(drop=True)
 
     return df_div
+
+# --- Filtering ---
+def filter_by_params(query_params: dict) -> pd.DataFrame:
+    screener = Screener()
+
+    screener_df = screener.stock(params=query_params, limit=1700)
+
+    print("Available columns:", screener_df.columns.tolist())
+    return screener_df
+
+# ----- CLI -----
+if __name__ == "__main__":
+    out = filter_by_params({"exchangeName": "HOSE,HNX,UPCOM"})
+    print(out)
