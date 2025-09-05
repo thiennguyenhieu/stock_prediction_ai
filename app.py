@@ -1,13 +1,23 @@
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
+import json
+
+# Best practice: page config at top
+st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 
 from src.fetch_historical_data import fetch_recent_price
 from src.fetch_financial_data import fetch_income_statement, fetch_ratio, fetch_balance_sheet
-from src.fetch_general_info import fetch_all_symbols, fetch_company_overview, fetch_dividend
+from src.fetch_general_info import (
+    fetch_all_symbols,
+    fetch_company_overview,
+    fetch_dividend,
+    filter_by_valuation,
+    filter_by_growth
+)
 from src.historical_inference_v1 import get_close_prediction
 from src.stock_analysis import get_completion
-from src.constants import *  # VI_STRINGS, COL_*, PROMPT_TEMPLATE
+from src.constants import *  # VI_STRINGS, COL_*, PROMPT_ANALYSIS, PROMPT_FILTER
 
 # ---------- Optional caching ----------
 @st.cache_data(show_spinner=False)
@@ -34,11 +44,15 @@ def load_financials_ratio(symbol: str):
 def load_financials_balance_sheet(symbol: str):
     return fetch_balance_sheet(symbol)
 
+@st.cache_data(show_spinner=False)
+def load_all_symbols():
+    return fetch_all_symbols()
+
 def run_completion(prompt: str):
     return get_completion(prompt)
 
 # ---------- Helpers ----------
-def get_stock_info_by_symbol(symbol: str, df) -> tuple:
+def _get_stock_info_by_symbol(symbol: str, df: pd.DataFrame) -> tuple[str | None, str | None]:
     row = df[df.iloc[:, 0] == symbol]
     if not row.empty:
         exchange = row.iloc[0, 1]
@@ -46,15 +60,34 @@ def get_stock_info_by_symbol(symbol: str, df) -> tuple:
         return exchange, organ_name
     return None, None
 
+def _to_html_no_index(df: pd.DataFrame) -> str:
+    """Render DataFrame without index; fall back if .style.hide isn't available."""
+    try:
+        return df.style.hide(axis="index").to_html()
+    except Exception:
+        return df.to_html(index=False)
+
+# ---- init logical AI flag once ----
+if "ai_enabled" not in st.session_state:
+    st.session_state.ai_enabled = False
+
+# ---- AI state sync callbacks ----
+def _sync_ai_from_filter():
+    st.session_state.ai_enabled = st.session_state.get("ai_enabled_filter", False)
+
+def _sync_ai_from_analysis():
+    st.session_state.ai_enabled = st.session_state.get("ai_enabled_analysis", False)
+
 # ---------- Static data ----------
-valid_symbols_with_info = fetch_all_symbols()
-valid_symbols = valid_symbols_with_info[valid_symbols_with_info.iloc[:, 0].str.len() == 3].iloc[:, 0].tolist()
+valid_symbols_with_info = load_all_symbols()  # cached
+valid_symbols = valid_symbols_with_info[
+    valid_symbols_with_info.iloc[:, 0].str.len() == 3
+].iloc[:, 0].tolist()
 
 # ---------- Layout ----------
-st.set_page_config(layout="wide")
 st.title(VI_STRINGS["app_title"])
 
-# placeholders for sections
+# Global placeholders for analysis area
 header_ph    = st.empty()
 chart_ph     = st.empty()
 finance_income_ph = st.empty()
@@ -64,17 +97,7 @@ dividend_ph  = st.empty()
 analysis_ph  = st.empty()
 info_ph      = st.empty()
 
-# session state (no default symbol on first load)
-if "current_symbol" not in st.session_state:
-    st.session_state.current_symbol = None
-
-with st.sidebar:
-    st.header(VI_STRINGS["sidebar_header"])
-    symbol_input = st.text_input(VI_STRINGS["enter_symbol"], value="").upper()
-    ai_enabled = st.checkbox(VI_STRINGS["enable_ai_analysis"], value=False)
-    apply_clicked = st.button(VI_STRINGS["apply_button"], type="primary")
-
-def clear_sections():
+def _clear_analysis_sections():
     header_ph.empty()
     chart_ph.empty()
     finance_income_ph.empty()
@@ -84,8 +107,8 @@ def clear_sections():
     analysis_ph.empty()
     info_ph.empty()
 
-def render_dashboard(symbol: str, ai_enabled: bool = False):
-    clear_sections()
+def _render_dashboard(symbol: str, ai_enabled: bool = False):
+    _clear_analysis_sections()
 
     # Validate BEFORE any fetch
     if not symbol:
@@ -114,7 +137,7 @@ def render_dashboard(symbol: str, ai_enabled: bool = False):
 
         if df_pred is None or df_pred.empty:
             with info_ph:
-                st.warning(VI_STRINGS["no_recent_price"])
+                st.warning(VI_STRINGS["no_prediction"])
             return
 
         # ensure COL_TIME exists on prediction
@@ -130,7 +153,7 @@ def render_dashboard(symbol: str, ai_enabled: bool = False):
         df_real[COL_TIME] = pd.to_datetime(df_real[COL_TIME])
         df_pred[COL_TIME] = pd.to_datetime(df_pred[COL_TIME])
 
-        exchange, organ_name = get_stock_info_by_symbol(symbol, valid_symbols_with_info)
+        exchange, organ_name = _get_stock_info_by_symbol(symbol, valid_symbols_with_info)
         industry = fetch_company_overview(symbol)
 
         # Header
@@ -167,6 +190,7 @@ def render_dashboard(symbol: str, ai_enabled: bool = False):
                 ),
                 yaxis='y1'
             ))
+            # bridge line, no hover
             fig.add_trace(go.Scatter(
                 x=[df_real[COL_TIME].iloc[-1], df_pred[COL_TIME].iloc[0]],
                 y=[df_real[COL_CLOSE].iloc[-1], df_pred[COL_CLOSE].iloc[0]],
@@ -184,7 +208,7 @@ def render_dashboard(symbol: str, ai_enabled: bool = False):
                 xaxis_title=VI_STRINGS["col_date"],
                 yaxis=dict(title=VI_STRINGS["col_close_price"], side='left'),
                 yaxis2=dict(title=VI_STRINGS["col_volume"], overlaying='y', side='right', showgrid=False),
-                legend=dict(x=0, y=1),
+                legend=dict(orientation="h", x=0, y=1.1),
                 hovermode='x unified',
                 template='plotly_white',
                 margin=dict(t=10, b=40, l=40, r=10),
@@ -196,32 +220,32 @@ def render_dashboard(symbol: str, ai_enabled: bool = False):
         with finance_income_ph.container():
             st.markdown("&nbsp;", unsafe_allow_html=True)
             st.subheader(VI_STRINGS["financial_income"])
-            st.markdown(df_income.style.hide(axis="index").to_html(), unsafe_allow_html=True)
+            st.markdown(_to_html_no_index(df_income), unsafe_allow_html=True)
 
         # Financial Ratios
         with finance_ratio_ph.container():
             st.markdown("&nbsp;", unsafe_allow_html=True)
-            st.subheader(VI_STRINGS["financial_ratio"])         
-            st.markdown(df_ratio.style.hide(axis="index").to_html(), unsafe_allow_html=True)
+            st.subheader(VI_STRINGS["financial_ratio"])
+            st.markdown(_to_html_no_index(df_ratio), unsafe_allow_html=True)
 
         # Financial Balance sheet
         with finance_balance_sheet_ph.container():
             st.markdown("&nbsp;", unsafe_allow_html=True)
-            st.subheader(VI_STRINGS["financial_balance_sheet"])         
-            st.markdown(df_balance_sheet.style.hide(axis="index").to_html(), unsafe_allow_html=True)
+            st.subheader(VI_STRINGS["financial_balance_sheet"])
+            st.markdown(_to_html_no_index(df_balance_sheet), unsafe_allow_html=True)
 
         # Dividend
         with dividend_ph.container():
             st.markdown("&nbsp;", unsafe_allow_html=True)
             st.subheader(VI_STRINGS["dividend_history"])
-            st.markdown(df_div.style.hide(axis="index").to_html(), unsafe_allow_html=True)
+            st.markdown(_to_html_no_index(df_div), unsafe_allow_html=True)
 
         # AI Analysis (conditional)
         if ai_enabled:
             with analysis_ph.container():
                 st.markdown("&nbsp;", unsafe_allow_html=True)
                 st.subheader(VI_STRINGS["ai_analysis"])
-                final_prompt = PROMPT_TEMPLATE.format(
+                final_prompt = PROMPT_ANALYSIS.format(
                     company_name=organ_name,
                     ticker=symbol,
                     industry=industry,
@@ -234,16 +258,131 @@ def render_dashboard(symbol: str, ai_enabled: bool = False):
                 response = run_completion(final_prompt)
                 st.write(response)
 
-# -------- Single render path --------
-# Only render after clicking Apply (and remember the choice)
-if apply_clicked:
-    st.session_state.current_symbol = symbol_input
-    render_dashboard(symbol_input, ai_enabled=ai_enabled)
-elif st.session_state.current_symbol:
-    # If a symbol was applied previously in this session, show it
-    render_dashboard(st.session_state.current_symbol, ai_enabled=ai_enabled)
-else:
-    # First load: no symbol yet — show guidance and no data fetches
-    clear_sections()
-    with info_ph:
+def _render_results_once(
+    df: pd.DataFrame,
+    results_ph,
+    ai_enabled_filter: bool = False,
+    max_tickers_for_ai: int = 50
+) -> None:
+    """Render filter results into `results_ph`, replacing previous content."""
+    results_ph.empty()
+
+    if df is None or df.empty:
+        results_ph.info(VI_STRINGS["no_result"])
+        return
+
+    # Table (hide index if supported)
+    try:
+        with results_ph.container():
+            st.dataframe(df, use_container_width=True, hide_index=True)
+    except TypeError:
+        html = df.to_html(index=False)
+        with results_ph.container():
+            st.markdown(html, unsafe_allow_html=True)
+
+    # Optional AI summary
+    if ai_enabled_filter:
+        # Robust ticker extraction
+        if "Mã cổ phiếu" in df.columns:
+            tickers = df["Mã cổ phiếu"].dropna().astype(str).unique().tolist()
+        elif "ticker" in df.columns:
+            tickers = df["ticker"].dropna().astype(str).unique().tolist()
+        else:
+            tickers = df.iloc[:, 0].dropna().astype(str).unique().tolist()
+
+        tickers = tickers[:max_tickers_for_ai]
+        if not tickers:
+            return
+
+        try:
+            with results_ph.container(), st.spinner(VI_STRINGS.get("ai_processing", "Đang phân tích bằng AI...")):
+                json_tickers = json.dumps(tickers, ensure_ascii=False)
+                prompt_filter = PROMPT_FILTER.format(tickers=json_tickers)
+                response = run_completion(prompt_filter)
+                st.write(response)
+        except Exception as e:
+            with results_ph.container():
+                st.warning(VI_STRINGS.get("ai_error_generic", f"Lỗi khi chạy AI: {e}"))
+
+# Tabs: Analysis + Filter (Analysis first => default)
+tab_analysis, tab_filter = st.tabs([VI_STRINGS["tab_analysis"], VI_STRINGS["tab_filter"]])
+
+# --------------------- FILTER TAB ---------------------
+with tab_filter:
+    st.subheader(VI_STRINGS["fitler_header"])  # keep your existing key
+
+    # Controls always on top
+    controls_box = st.container()
+    with controls_box:
+        c1, c2, c3 = st.columns([1, 1, 1])
+        run_value  = c1.button(VI_STRINGS["filter_value"],  use_container_width=True)
+        run_growth = c2.button(VI_STRINGS["filter_growth"], use_container_width=True)
+
+        ai_enabled_filter = c3.checkbox(
+            VI_STRINGS["enable_ai_analysis"],
+            value=st.session_state.get("ai_enabled", False),
+            key="ai_enabled_filter",
+            on_change=_sync_ai_from_filter
+        )
+
+    # Results area BELOW controls
+    results_ph = st.empty()
+
+    if run_value:
+        with st.spinner(VI_STRINGS["filtering_value_spinner"]):
+            try:
+                df_val = filter_by_valuation()
+                _render_results_once(df_val, results_ph, ai_enabled_filter=st.session_state.get("ai_enabled", False))
+            except Exception as e:
+                results_ph.error(VI_STRINGS["filter_error_value"].format(e=e))
+
+    if run_growth:
+        with st.spinner(VI_STRINGS["filtering_growth_spinner"]):
+            try:
+                df_gro = filter_by_growth()
+                _render_results_once(df_gro, results_ph, ai_enabled_filter=st.session_state.get("ai_enabled", False))  # fixed
+            except Exception as e:
+                results_ph.error(VI_STRINGS["filter_error_growth"].format(e=e))
+
+# --------------------- ANALYSIS TAB ---------------------
+with tab_analysis:
+    st.subheader(VI_STRINGS["sidebar_header"])
+
+    # Top controls container (stays in place)
+    controls_box = st.container()
+    with controls_box:
+        c1, c2, c3 = st.columns([2, 1, 1])
+        with c1:
+            symbol_input = st.text_input(
+                VI_STRINGS["enter_symbol"],
+                value=(st.session_state.get("current_symbol") or "")
+            ).upper()
+        with c2:
+            ai_enabled = st.checkbox(
+                VI_STRINGS["enable_ai_analysis"],
+                value=st.session_state.get("ai_enabled", False),
+                key="ai_enabled_analysis",
+                on_change=_sync_ai_from_analysis
+            )
+        with c3:
+            apply_clicked = st.button(
+                VI_STRINGS["apply_button"],
+                type="primary",
+                use_container_width=True
+            )
+
+    # Keep session state in sync
+    if apply_clicked:
+        st.session_state.current_symbol = symbol_input
+        st.query_params["symbol"] = symbol_input
+        # ai_enabled already synced via callback
+
+    # Render analysis (default tab)
+    if st.session_state.get("current_symbol"):
+        _render_dashboard(
+            st.session_state["current_symbol"],
+            ai_enabled=st.session_state.get("ai_enabled", False)
+        )
+    else:
+        _clear_analysis_sections()
         st.info(VI_STRINGS["invalid_symbol_info"])

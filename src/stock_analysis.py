@@ -11,7 +11,7 @@ if not api_key:
 client = OpenAI(api_key=api_key)
 
 def get_completion(
-    prompt: str = PROMPT_TEMPLATE,
+    prompt: str = PROMPT_ANALYSIS,
     model: str = "gpt-5",
 ) -> str:
     """

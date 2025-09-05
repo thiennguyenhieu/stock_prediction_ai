@@ -57,7 +57,7 @@ COL_ATTRIBUTE_YOY = 'Attribute to parent company YoY (%)'
 
 ENCODER_PATH = "data/symbol_encoder.pkl"
 
-PROMPT_TEMPLATE = """
+PROMPT_ANALYSIS = """
 Bạn là chuyên gia phân tích chứng khoán.  
 Dựa trên dữ liệu đầu vào (Tên, Mã, Ngành, Giá hiện tại, Income, Ratios, Balance sheet, Cổ tức), hãy:
 
@@ -81,12 +81,24 @@ Trình bày ngắn gọn, rõ ràng, dễ đọc cho nhà đầu tư.
 - Cổ tức: {json_dividend}
 """
 
+PROMPT_FILTER = """
+Bạn là chuyên gia phân tích chứng khoán.  
+Đầu vào: danh sách các mã cổ phiếu {tickers}.  
+
+Nhiệm vụ: với mỗi mã, viết nhận xét ngắn gọn (1–2 câu).  
+- ⚠️ Cảnh báo nếu lợi nhuận chủ yếu đến từ khoản một lần (thanh lý tài sản, hoàn nhập dự phòng, lãi tài chính bất thường…) → “không bền vững”.  
+- ⚠️ Nếu có yếu tố một lần nhưng vẫn duy trì lợi nhuận cốt lõi ổn định → ghi rõ “có yếu tố một lần, nhưng nền tảng cốt lõi ổn định”.  
+- ✅ Đánh giá cao nếu lợi nhuận đến từ hoạt động cốt lõi, ổn định và bền vững.  
+
+Yêu cầu: Xuất kết quả dưới dạng bảng Markdown với 2 cột: **Ticker** | **Nhận xét**.
+"""
+
 VI_STRINGS = {
     "app_title": "📈 Ứng dụng Phân Tích Cổ phiếu",
     "sidebar_header": "🗂️ Thiết lập Cổ phiếu",
     "enter_symbol": "Nhập mã cổ phiếu (ví dụ: ACB)",
     "apply_button": "Áp dụng",
-    "invalid_symbol_info": "👈 Vui lòng chọn một mã hợp lệ gồm 3 ký tự và nhấn **Áp dụng**.",
+    "invalid_symbol_info": "Vui lòng chọn một mã hợp lệ gồm 3 ký tự và nhấn **Áp dụng**.",
     "symbol_not_found": "Mã '{symbol}' không tồn tại trong dữ liệu mô hình.",
     "loading_spinner": "⏳ Đang tải và phân tích dữ liệu cổ phiếu...",
     "industry": "**Ngành nghề:** {industry}",
@@ -110,4 +122,15 @@ VI_STRINGS = {
     "enable_ai_analysis": "Bật phân tích AI",
     "cash": "Tiền mặt",
     "share": "Cổ phiếu",
+    "no_prediction": "Không có dữ liệu dự báo.",
+    "tab_analysis": "📊 Phân tích",
+    "tab_filter": "🧰 Bộ lọc",
+    "fitler_header": "Bộ lọc cổ phiếu",
+    "filter_value": "Lọc theo giá trị",
+    "filter_growth": "Lọc theo tăng trưởng",
+    "filtering_value_spinner": "⏳ Đang lọc theo giá trị...",
+    "filtering_growth_spinner": "⏳ Đang lọc theo tăng trưởng...",
+    "filter_error_value": "Lỗi khi lọc theo giá trị: {e}",
+    "filter_error_growth": "Lỗi khi lọc theo tăng trưởng: {e}",
+    "no_result": "Không có mã nào thỏa điều kiện.",
 }
