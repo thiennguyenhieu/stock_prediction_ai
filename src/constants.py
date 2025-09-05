@@ -58,17 +58,31 @@ COL_ATTRIBUTE_YOY = 'Attribute to parent company YoY (%)'
 ENCODER_PATH = "data/symbol_encoder.pkl"
 
 PROMPT_ANALYSIS = """
-Bạn là chuyên gia phân tích chứng khoán.  
-Dựa trên dữ liệu đầu vào (Tên, Mã, Ngành, Giá hiện tại, Income, Ratios, Balance sheet, Cổ tức), hãy:
+Bạn là chuyên gia phân tích chứng khoán. 
+Dựa trên dữ liệu đầu vào (Tên, Mã, Ngành, Giá hiện tại, Income, Ratios, Balance sheet, Cổ tức), hãy phân tích ngắn gọn cho nhà đầu tư theo cấu trúc sau:
 
-1. Giới thiệu ngắn về công ty.  
-2. Tin tức ngành & công ty ảnh hưởng đến doanh thu.  
-3. Tóm tắt KQKD gần nhất: Doanh thu, LNST, EPS, ROE/ROA; phân tích vốn CSH, nợ, đòn bẩy.  
-4. Dự phóng LNST & EPS cho 1 quý và 2 quý tới, kèm lý do.  
-5. Định giá: so sánh giá hiện tại với giá hợp lý (EPS dự phóng × P/E TB ngành).  
-6. Khuyến nghị: MUA / BÁN / GIỮ.  
+I. Giới thiệu công ty  
+- Tên, mã, ngành, hoạt động chính.
 
-Trình bày ngắn gọn, rõ ràng, dễ đọc cho nhà đầu tư.
+II. Bối cảnh ngành & công ty  
+- Tin tức/diễn biến ngành và công ty ảnh hưởng tới doanh thu, lợi nhuận.
+
+III. KQKD gần nhất  
+- Doanh thu, LNST, EPS, ROE/ROA.  
+- Phân tích vốn chủ, nợ, đòn bẩy tài chính.
+
+IV. Dự phóng (1 quý & 2 quý tới)  
+- LNST & EPS dự kiến.  
+- Lý do dự phóng (xu hướng ngành, biên LN, chi phí, nợ...).
+
+V. Định giá  
+- Giá hợp lý = EPS dự phóng × P/E TB ngành (nếu thiếu lấy 10).  
+- So sánh với giá hiện tại.  
+
+VI. Khuyến nghị  
+- MUA / GIỮ / BÁN, kèm 1 câu lý do ngắn gọn.
+
+⚠️ Yêu cầu: Trình bày ngắn gọn, rõ ràng, dễ đọc (bullet points, không viết lan man).
 
 ĐẦU VÀO
 - Tên: {company_name}  
@@ -82,15 +96,17 @@ Trình bày ngắn gọn, rõ ràng, dễ đọc cho nhà đầu tư.
 """
 
 PROMPT_FILTER = """
-Bạn là chuyên gia phân tích chứng khoán.  
-Đầu vào: danh sách các mã cổ phiếu {tickers}.  
+Bạn là chuyên gia phân tích chứng khoán.
+Đầu vào: danh sách các mã cổ phiếu {tickers}.
 
-Nhiệm vụ: với mỗi mã, viết nhận xét ngắn gọn (1–2 câu).  
-- ⚠️ Cảnh báo nếu lợi nhuận chủ yếu đến từ khoản một lần (thanh lý tài sản, hoàn nhập dự phòng, lãi tài chính bất thường…) → “không bền vững”.  
-- ⚠️ Nếu có yếu tố một lần nhưng vẫn duy trì lợi nhuận cốt lõi ổn định → ghi rõ “có yếu tố một lần, nhưng nền tảng cốt lõi ổn định”.  
-- ✅ Đánh giá cao nếu lợi nhuận đến từ hoạt động cốt lõi, ổn định và bền vững.  
+Nhiệm vụ: với mỗi mã, viết nhận xét ngắn gọn (1–2 câu).
++ ⚠️ Cảnh báo nếu lợi nhuận chủ yếu đến từ khoản một lần (thanh lý tài sản, hoàn nhập dự phòng, lãi tài chính bất thường…) → “không bền vững”.
++ ✅ Đánh giá cao nếu lợi nhuận đến từ hoạt động cốt lõi, ổn định và bền vững.
 
-Yêu cầu: Xuất kết quả dưới dạng bảng Markdown với 2 cột: **Ticker** | **Nhận xét**.
+Yêu cầu: Xuất kết quả dưới dạng bảng Markdown với 2 cột:
++ Mã cổ phiếu
++ Nhận xét (có icon ✅ hoặc ⚠️ ở đầu để phân loại)
++ Danh sách mã tích cực: chỉ liệt kê các ticker được đánh giá tích cực/khả quan.
 """
 
 VI_STRINGS = {
@@ -133,4 +149,6 @@ VI_STRINGS = {
     "filter_error_value": "Lỗi khi lọc theo giá trị: {e}",
     "filter_error_growth": "Lỗi khi lọc theo tăng trưởng: {e}",
     "no_result": "Không có mã nào thỏa điều kiện.",
+    "ai_processing": "Đang phân tích bằng AI...",
+    "ai_error_generic": "Lỗi khi chạy AI: {e}",
 }

@@ -87,223 +87,6 @@ valid_symbols = valid_symbols_with_info[
 # ---------- Layout ----------
 st.title(VI_STRINGS["app_title"])
 
-# Global placeholders for analysis area
-header_ph    = st.empty()
-chart_ph     = st.empty()
-finance_income_ph = st.empty()
-finance_ratio_ph  = st.empty()
-finance_balance_sheet_ph  = st.empty()
-dividend_ph  = st.empty()
-analysis_ph  = st.empty()
-info_ph      = st.empty()
-
-def _clear_analysis_sections():
-    header_ph.empty()
-    chart_ph.empty()
-    finance_income_ph.empty()
-    finance_ratio_ph.empty()
-    finance_balance_sheet_ph.empty()
-    dividend_ph.empty()
-    analysis_ph.empty()
-    info_ph.empty()
-
-def _render_dashboard(symbol: str, ai_enabled: bool = False):
-    _clear_analysis_sections()
-
-    # Validate BEFORE any fetch
-    if not symbol:
-        with info_ph:
-            st.info(VI_STRINGS["invalid_symbol_info"])
-        return
-
-    if symbol not in valid_symbols:
-        with info_ph:
-            st.info(VI_STRINGS["invalid_symbol_info"])
-            st.error(VI_STRINGS["symbol_not_found"].format(symbol=symbol))
-        return
-
-    with st.spinner(VI_STRINGS["loading_spinner"]):
-        df_real = load_recent_price(symbol)
-        if df_real is None or df_real.empty:
-            with info_ph:
-                st.error(VI_STRINGS["no_recent_price"])
-            return
-
-        df_pred = load_prediction(symbol, 14)
-        df_div  = load_dividend(symbol)
-        df_income  = load_financials_income_statement(symbol)
-        df_ratio = load_financials_ratio(symbol)
-        df_balance_sheet = load_financials_balance_sheet(symbol)
-
-        if df_pred is None or df_pred.empty:
-            with info_ph:
-                st.warning(VI_STRINGS["no_prediction"])
-            return
-
-        # ensure COL_TIME exists on prediction
-        if COL_TIME not in df_pred.columns:
-            last_dt = pd.to_datetime(df_real[COL_TIME].iloc[-1])
-            forecast_dates = pd.date_range(
-                start=last_dt + pd.offsets.BDay(1),
-                periods=len(df_pred), freq=pd.offsets.BDay()
-            )
-            df_pred.insert(0, COL_TIME, forecast_dates)
-
-        # ensure datetime
-        df_real[COL_TIME] = pd.to_datetime(df_real[COL_TIME])
-        df_pred[COL_TIME] = pd.to_datetime(df_pred[COL_TIME])
-
-        exchange, organ_name = _get_stock_info_by_symbol(symbol, valid_symbols_with_info)
-        industry = fetch_company_overview(symbol)
-
-        # Header
-        with header_ph.container():
-            st.markdown("&nbsp;", unsafe_allow_html=True)
-            st.subheader(f"🏢 {organ_name} ({exchange}: {symbol})")
-            st.markdown(VI_STRINGS["industry"].format(industry=industry))
-
-        # Chart
-        with chart_ph.container():
-            st.markdown("&nbsp;", unsafe_allow_html=True)
-            st.subheader(VI_STRINGS["price_forecast"])
-
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=df_real[COL_TIME], y=df_real[COL_CLOSE],
-                mode='lines+markers', name=VI_STRINGS["actual_price"],
-                marker=dict(symbol='circle', color='blue'),
-                line=dict(color='blue'),
-                hovertemplate=(
-                    f'{VI_STRINGS["col_date"]}: %{{x|%Y-%m-%d}}'
-                    f'<br>{VI_STRINGS["actual_price"]}: %{{y:.2f}}<extra></extra>'
-                ),
-                yaxis='y1'
-            ))
-            fig.add_trace(go.Scatter(
-                x=df_pred[COL_TIME], y=df_pred[COL_CLOSE],
-                mode='lines+markers', name=VI_STRINGS["predicted_price"],
-                marker=dict(symbol='x', color='orange'),
-                line=dict(color='orange', dash='dash'),
-                hovertemplate=(
-                    f'{VI_STRINGS["col_date"]}: %{{x|%Y-%m-%d}}'
-                    f'<br>{VI_STRINGS["predicted_price"]}: %{{y:.2f}}<extra></extra>'
-                ),
-                yaxis='y1'
-            ))
-            # bridge line, no hover
-            fig.add_trace(go.Scatter(
-                x=[df_real[COL_TIME].iloc[-1], df_pred[COL_TIME].iloc[0]],
-                y=[df_real[COL_CLOSE].iloc[-1], df_pred[COL_CLOSE].iloc[0]],
-                mode='lines', line=dict(color='orange', dash='dash'),
-                hoverinfo='skip', showlegend=False, yaxis='y1'
-            ))
-            if COL_VOLUME in df_real.columns:
-                fig.add_trace(go.Bar(
-                    x=df_real[COL_TIME], y=df_real[COL_VOLUME],
-                    name=VI_STRINGS["col_volume"],
-                    marker_color='rgba(100, 100, 255, 0.3)',
-                    yaxis='y2', opacity=0.5
-                ))
-            fig.update_layout(
-                xaxis_title=VI_STRINGS["col_date"],
-                yaxis=dict(title=VI_STRINGS["col_close_price"], side='left'),
-                yaxis2=dict(title=VI_STRINGS["col_volume"], overlaying='y', side='right', showgrid=False),
-                legend=dict(orientation="h", x=0, y=1.1),
-                hovermode='x unified',
-                template='plotly_white',
-                margin=dict(t=10, b=40, l=40, r=10),
-                height=450
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        # Financials income
-        with finance_income_ph.container():
-            st.markdown("&nbsp;", unsafe_allow_html=True)
-            st.subheader(VI_STRINGS["financial_income"])
-            st.markdown(_to_html_no_index(df_income), unsafe_allow_html=True)
-
-        # Financial Ratios
-        with finance_ratio_ph.container():
-            st.markdown("&nbsp;", unsafe_allow_html=True)
-            st.subheader(VI_STRINGS["financial_ratio"])
-            st.markdown(_to_html_no_index(df_ratio), unsafe_allow_html=True)
-
-        # Financial Balance sheet
-        with finance_balance_sheet_ph.container():
-            st.markdown("&nbsp;", unsafe_allow_html=True)
-            st.subheader(VI_STRINGS["financial_balance_sheet"])
-            st.markdown(_to_html_no_index(df_balance_sheet), unsafe_allow_html=True)
-
-        # Dividend
-        with dividend_ph.container():
-            st.markdown("&nbsp;", unsafe_allow_html=True)
-            st.subheader(VI_STRINGS["dividend_history"])
-            st.markdown(_to_html_no_index(df_div), unsafe_allow_html=True)
-
-        # AI Analysis (conditional)
-        if ai_enabled:
-            with analysis_ph.container():
-                st.markdown("&nbsp;", unsafe_allow_html=True)
-                st.subheader(VI_STRINGS["ai_analysis"])
-                final_prompt = PROMPT_ANALYSIS.format(
-                    company_name=organ_name,
-                    ticker=symbol,
-                    industry=industry,
-                    current_price=df_real[COL_CLOSE].iloc[-1] * 1000,
-                    json_financial_income=df_income.to_json(orient="records", indent=2, force_ascii=False),
-                    json_financial_ratio=df_ratio.to_json(orient="records", indent=2, force_ascii=False),
-                    json_financial_balance_sheet=df_balance_sheet.to_json(orient="records", indent=2, force_ascii=False),
-                    json_dividend=df_div.to_json(orient="records", indent=2, force_ascii=False)
-                )
-                response = run_completion(final_prompt)
-                st.write(response)
-
-def _render_results_once(
-    df: pd.DataFrame,
-    results_ph,
-    ai_enabled_filter: bool = False,
-    max_tickers_for_ai: int = 50
-) -> None:
-    """Render filter results into `results_ph`, replacing previous content."""
-    results_ph.empty()
-
-    if df is None or df.empty:
-        results_ph.info(VI_STRINGS["no_result"])
-        return
-
-    # Table (hide index if supported)
-    try:
-        with results_ph.container():
-            st.dataframe(df, use_container_width=True, hide_index=True)
-    except TypeError:
-        html = df.to_html(index=False)
-        with results_ph.container():
-            st.markdown(html, unsafe_allow_html=True)
-
-    # Optional AI summary
-    if ai_enabled_filter:
-        # Robust ticker extraction
-        if "Mã cổ phiếu" in df.columns:
-            tickers = df["Mã cổ phiếu"].dropna().astype(str).unique().tolist()
-        elif "ticker" in df.columns:
-            tickers = df["ticker"].dropna().astype(str).unique().tolist()
-        else:
-            tickers = df.iloc[:, 0].dropna().astype(str).unique().tolist()
-
-        tickers = tickers[:max_tickers_for_ai]
-        if not tickers:
-            return
-
-        try:
-            with results_ph.container(), st.spinner(VI_STRINGS.get("ai_processing", "Đang phân tích bằng AI...")):
-                json_tickers = json.dumps(tickers, ensure_ascii=False)
-                prompt_filter = PROMPT_FILTER.format(tickers=json_tickers)
-                response = run_completion(prompt_filter)
-                st.write(response)
-        except Exception as e:
-            with results_ph.container():
-                st.warning(VI_STRINGS.get("ai_error_generic", f"Lỗi khi chạy AI: {e}"))
-
 # Tabs: Analysis + Filter (Analysis first => default)
 tab_analysis, tab_filter = st.tabs([VI_STRINGS["tab_analysis"], VI_STRINGS["tab_filter"]])
 
@@ -327,22 +110,68 @@ with tab_filter:
 
     # Results area BELOW controls
     results_ph = st.empty()
+    ai_response_ph = st.empty()
+
+    def _render_results_once(
+        df: pd.DataFrame,
+        ai_enabled_filter: bool = False
+    ) -> None:
+        """Render filter results and AI response below in the same function."""
+
+        results_ph.empty()
+        ai_response_ph.empty()
+
+        if df is None or df.empty:
+            results_ph.info(VI_STRINGS["no_result"])
+            return
+
+        # Hiển thị bảng kết quả (dùng HTML để ẩn index)
+        with results_ph.container():
+            st.markdown(_to_html_no_index(df), unsafe_allow_html=True)
+
+        # Nếu bật AI thì hiển thị phân tích ngay dưới bảng
+        if ai_enabled_filter:
+            if "Mã cổ phiếu" in df.columns:
+                tickers = df["Mã cổ phiếu"].dropna().astype(str).unique().tolist()
+            elif "ticker" in df.columns:
+                tickers = df["ticker"].dropna().astype(str).unique().tolist()
+            else:
+                tickers = df.iloc[:, 0].dropna().astype(str).unique().tolist()
+
+            if not tickers:
+                return
+
+            try:
+                with ai_response_ph.container(), st.spinner(VI_STRINGS["ai_processing"]):
+                    json_tickers = json.dumps(tickers, ensure_ascii=False)
+                    prompt_filter = PROMPT_FILTER.format(tickers=json_tickers)
+                    response = run_completion(prompt_filter)
+                    st.write(response)
+            except Exception as e:
+                with ai_response_ph.container():
+                    st.warning(VI_STRINGS["ai_error_generic"].format(e=e))
 
     if run_value:
         with st.spinner(VI_STRINGS["filtering_value_spinner"]):
             try:
                 df_val = filter_by_valuation()
-                _render_results_once(df_val, results_ph, ai_enabled_filter=st.session_state.get("ai_enabled", False))
             except Exception as e:
                 results_ph.error(VI_STRINGS["filter_error_value"].format(e=e))
+                df_val = None
+
+        if df_val is not None:
+            _render_results_once(df_val, ai_enabled_filter=st.session_state.get("ai_enabled", False))
 
     if run_growth:
         with st.spinner(VI_STRINGS["filtering_growth_spinner"]):
             try:
                 df_gro = filter_by_growth()
-                _render_results_once(df_gro, results_ph, ai_enabled_filter=st.session_state.get("ai_enabled", False))  # fixed
             except Exception as e:
                 results_ph.error(VI_STRINGS["filter_error_growth"].format(e=e))
+                df_gro = None
+
+        if df_gro is not None:
+            _render_results_once(df_gro, ai_enabled_filter=st.session_state.get("ai_enabled", False))
 
 # --------------------- ANALYSIS TAB ---------------------
 with tab_analysis:
@@ -376,6 +205,176 @@ with tab_analysis:
         st.session_state.current_symbol = symbol_input
         st.query_params["symbol"] = symbol_input
         # ai_enabled already synced via callback
+
+    header_ph    = st.empty()
+    chart_ph     = st.empty()
+    finance_income_ph = st.empty()
+    finance_ratio_ph  = st.empty()
+    finance_balance_sheet_ph  = st.empty()
+    dividend_ph  = st.empty()
+    analysis_ph  = st.empty()
+    info_ph      = st.empty()
+
+    def _clear_analysis_sections():
+        header_ph.empty()
+        chart_ph.empty()
+        finance_income_ph.empty()
+        finance_ratio_ph.empty()
+        finance_balance_sheet_ph.empty()
+        dividend_ph.empty()
+        analysis_ph.empty()
+        info_ph.empty()
+    
+    def _render_dashboard(symbol: str, ai_enabled: bool = False):
+        _clear_analysis_sections()
+
+        # Validate BEFORE any fetch
+        if not symbol:
+            with info_ph:
+                st.info(VI_STRINGS["invalid_symbol_info"])
+            return
+
+        if symbol not in valid_symbols:
+            with info_ph:
+                st.info(VI_STRINGS["invalid_symbol_info"])
+                st.error(VI_STRINGS["symbol_not_found"].format(symbol=symbol))
+            return
+
+        with st.spinner(VI_STRINGS["loading_spinner"]):
+            df_real = load_recent_price(symbol)
+            if df_real is None or df_real.empty:
+                with info_ph:
+                    st.error(VI_STRINGS["no_recent_price"])
+                return
+
+            df_pred = load_prediction(symbol, 14)
+            df_div  = load_dividend(symbol)
+            df_income  = load_financials_income_statement(symbol)
+            df_ratio = load_financials_ratio(symbol)
+            df_balance_sheet = load_financials_balance_sheet(symbol)
+
+            if df_pred is None or df_pred.empty:
+                with info_ph:
+                    st.warning(VI_STRINGS["no_prediction"])
+                return
+
+            # ensure COL_TIME exists on prediction
+            if COL_TIME not in df_pred.columns:
+                last_dt = pd.to_datetime(df_real[COL_TIME].iloc[-1])
+                forecast_dates = pd.date_range(
+                    start=last_dt + pd.offsets.BDay(1),
+                    periods=len(df_pred), freq=pd.offsets.BDay()
+                )
+                df_pred.insert(0, COL_TIME, forecast_dates)
+
+            # ensure datetime
+            df_real[COL_TIME] = pd.to_datetime(df_real[COL_TIME])
+            df_pred[COL_TIME] = pd.to_datetime(df_pred[COL_TIME])
+
+            exchange, organ_name = _get_stock_info_by_symbol(symbol, valid_symbols_with_info)
+            industry = fetch_company_overview(symbol)
+
+            # Header
+            with header_ph.container():
+                st.markdown("&nbsp;", unsafe_allow_html=True)
+                st.subheader(f"🏢 {organ_name} ({exchange}: {symbol})")
+                st.markdown(VI_STRINGS["industry"].format(industry=industry))
+
+            # Chart
+            with chart_ph.container():
+                st.markdown("&nbsp;", unsafe_allow_html=True)
+                st.subheader(VI_STRINGS["price_forecast"])
+
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=df_real[COL_TIME], y=df_real[COL_CLOSE],
+                    mode='lines+markers', name=VI_STRINGS["actual_price"],
+                    marker=dict(symbol='circle', color='blue'),
+                    line=dict(color='blue'),
+                    hovertemplate=(
+                        f'{VI_STRINGS["col_date"]}: %{{x|%Y-%m-%d}}'
+                        f'<br>{VI_STRINGS["actual_price"]}: %{{y:.2f}}<extra></extra>'
+                    ),
+                    yaxis='y1'
+                ))
+                fig.add_trace(go.Scatter(
+                    x=df_pred[COL_TIME], y=df_pred[COL_CLOSE],
+                    mode='lines+markers', name=VI_STRINGS["predicted_price"],
+                    marker=dict(symbol='x', color='orange'),
+                    line=dict(color='orange', dash='dash'),
+                    hovertemplate=(
+                        f'{VI_STRINGS["col_date"]}: %{{x|%Y-%m-%d}}'
+                        f'<br>{VI_STRINGS["predicted_price"]}: %{{y:.2f}}<extra></extra>'
+                    ),
+                    yaxis='y1'
+                ))
+                # bridge line, no hover
+                fig.add_trace(go.Scatter(
+                    x=[df_real[COL_TIME].iloc[-1], df_pred[COL_TIME].iloc[0]],
+                    y=[df_real[COL_CLOSE].iloc[-1], df_pred[COL_CLOSE].iloc[0]],
+                    mode='lines', line=dict(color='orange', dash='dash'),
+                    hoverinfo='skip', showlegend=False, yaxis='y1'
+                ))
+                if COL_VOLUME in df_real.columns:
+                    fig.add_trace(go.Bar(
+                        x=df_real[COL_TIME], y=df_real[COL_VOLUME],
+                        name=VI_STRINGS["col_volume"],
+                        marker_color='rgba(100, 100, 255, 0.3)',
+                        yaxis='y2', opacity=0.5
+                    ))
+                fig.update_layout(
+                    xaxis_title=VI_STRINGS["col_date"],
+                    yaxis=dict(title=VI_STRINGS["col_close_price"], side='left'),
+                    yaxis2=dict(title=VI_STRINGS["col_volume"], overlaying='y', side='right', showgrid=False),
+                    legend=dict(orientation="h", x=0, y=1.1),
+                    hovermode='x unified',
+                    template='plotly_white',
+                    margin=dict(t=10, b=40, l=40, r=10),
+                    height=450
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+            # Financials income
+            with finance_income_ph.container():
+                st.markdown("&nbsp;", unsafe_allow_html=True)
+                st.subheader(VI_STRINGS["financial_income"])
+                st.markdown(_to_html_no_index(df_income), unsafe_allow_html=True)
+
+            # Financial Ratios
+            with finance_ratio_ph.container():
+                st.markdown("&nbsp;", unsafe_allow_html=True)
+                st.subheader(VI_STRINGS["financial_ratio"])
+                st.markdown(_to_html_no_index(df_ratio), unsafe_allow_html=True)
+
+            # Financial Balance sheet
+            with finance_balance_sheet_ph.container():
+                st.markdown("&nbsp;", unsafe_allow_html=True)
+                st.subheader(VI_STRINGS["financial_balance_sheet"])
+                st.markdown(_to_html_no_index(df_balance_sheet), unsafe_allow_html=True)
+
+            # Dividend
+            with dividend_ph.container():
+                st.markdown("&nbsp;", unsafe_allow_html=True)
+                st.subheader(VI_STRINGS["dividend_history"])
+                st.markdown(_to_html_no_index(df_div), unsafe_allow_html=True)
+
+            # AI Analysis (conditional)
+            if ai_enabled:
+                with analysis_ph.container():
+                    st.markdown("&nbsp;", unsafe_allow_html=True)
+                    st.subheader(VI_STRINGS["ai_analysis"])
+                    final_prompt = PROMPT_ANALYSIS.format(
+                        company_name=organ_name,
+                        ticker=symbol,
+                        industry=industry,
+                        current_price=df_real[COL_CLOSE].iloc[-1] * 1000,
+                        json_financial_income=df_income.to_json(orient="records", indent=2, force_ascii=False),
+                        json_financial_ratio=df_ratio.to_json(orient="records", indent=2, force_ascii=False),
+                        json_financial_balance_sheet=df_balance_sheet.to_json(orient="records", indent=2, force_ascii=False),
+                        json_dividend=df_div.to_json(orient="records", indent=2, force_ascii=False)
+                    )
+                    response = run_completion(final_prompt)
+                    st.write(response)
 
     # Render analysis (default tab)
     if st.session_state.get("current_symbol"):

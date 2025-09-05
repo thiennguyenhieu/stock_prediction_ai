@@ -115,6 +115,7 @@ def filter_by_growth() -> pd.DataFrame:
       - last_quarter_profit_growth > 20 (%)
       - last_quarter_revenue_growth > 20 (%)
       - roe > 15 (%, robust to ratio vs % scale)
+      - P/E < 15
     """
 
     screener = Screener()
@@ -127,6 +128,7 @@ def filter_by_growth() -> pd.DataFrame:
         "last_quarter_profit_growth",
         "last_quarter_revenue_growth",
         "roe",
+        "pe"
     ]
     for col in required:
         if col not in df.columns:
@@ -138,7 +140,8 @@ def filter_by_growth() -> pd.DataFrame:
         "eps_ttm_growth1_year",
         "last_quarter_profit_growth",
         "last_quarter_revenue_growth",
-        "roe"
+        "roe",
+        "pe"
     ]
     for col in num_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -154,7 +157,8 @@ def filter_by_growth() -> pd.DataFrame:
         (df["eps_ttm_growth1_year"] > 20) &
         (df["last_quarter_profit_growth"] > 20) &
         (df["last_quarter_revenue_growth"] > 20) &
-        (roe > 15)
+        (roe > 15) &
+        (df["pe"] > 0) & (df["pe"] < 15)
     )
 
     out = df.loc[mask].copy()
