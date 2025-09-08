@@ -1,7 +1,6 @@
 import sys
 import os
 import pandas as pd
-from concurrent.futures import ThreadPoolExecutor
 from vnstock import Finance
 
 # Project imports

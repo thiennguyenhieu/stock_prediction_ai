@@ -143,9 +143,9 @@ with tab_filter:
 
             try:
                 with ai_response_ph.container(), st.spinner(VI_STRINGS["ai_processing"]):
-                    json_tickers = json.dumps(tickers, ensure_ascii=False)
-                    prompt_filter = PROMPT_FILTER.format(tickers=json_tickers)
+                    prompt_filter = PROMPT_FILTER.format(json_tickers=df.to_json(orient="records", indent=2, force_ascii=False))
                     response = run_completion(prompt_filter)
+                    st.markdown("&nbsp;", unsafe_allow_html=True)
                     st.write(response)
             except Exception as e:
                 with ai_response_ph.container():
@@ -207,23 +207,23 @@ with tab_analysis:
         # ai_enabled already synced via callback
 
     header_ph    = st.empty()
+    info_ph      = st.empty()
     chart_ph     = st.empty()
     finance_income_ph = st.empty()
     finance_ratio_ph  = st.empty()
     finance_balance_sheet_ph  = st.empty()
     dividend_ph  = st.empty()
     analysis_ph  = st.empty()
-    info_ph      = st.empty()
 
     def _clear_analysis_sections():
         header_ph.empty()
+        info_ph.empty()
         chart_ph.empty()
         finance_income_ph.empty()
         finance_ratio_ph.empty()
         finance_balance_sheet_ph.empty()
         dividend_ph.empty()
         analysis_ph.empty()
-        info_ph.empty()
     
     def _render_dashboard(symbol: str, ai_enabled: bool = False):
         _clear_analysis_sections()
@@ -253,24 +253,6 @@ with tab_analysis:
             df_ratio = load_financials_ratio(symbol)
             df_balance_sheet = load_financials_balance_sheet(symbol)
 
-            if df_pred is None or df_pred.empty:
-                with info_ph:
-                    st.warning(VI_STRINGS["no_prediction"])
-                return
-
-            # ensure COL_TIME exists on prediction
-            if COL_TIME not in df_pred.columns:
-                last_dt = pd.to_datetime(df_real[COL_TIME].iloc[-1])
-                forecast_dates = pd.date_range(
-                    start=last_dt + pd.offsets.BDay(1),
-                    periods=len(df_pred), freq=pd.offsets.BDay()
-                )
-                df_pred.insert(0, COL_TIME, forecast_dates)
-
-            # ensure datetime
-            df_real[COL_TIME] = pd.to_datetime(df_real[COL_TIME])
-            df_pred[COL_TIME] = pd.to_datetime(df_pred[COL_TIME])
-
             exchange, organ_name = _get_stock_info_by_symbol(symbol, valid_symbols_with_info)
             industry = fetch_company_overview(symbol)
 
@@ -280,59 +262,76 @@ with tab_analysis:
                 st.subheader(f"🏢 {organ_name} ({exchange}: {symbol})")
                 st.markdown(VI_STRINGS["industry"].format(industry=industry))
 
-            # Chart
-            with chart_ph.container():
-                st.markdown("&nbsp;", unsafe_allow_html=True)
-                st.subheader(VI_STRINGS["price_forecast"])
+            if df_pred is None or df_pred.empty:
+                with info_ph:
+                    st.warning(VI_STRINGS["no_prediction"])
+            else:
+                # ensure COL_TIME exists on prediction
+                if COL_TIME not in df_pred.columns:
+                    last_dt = pd.to_datetime(df_real[COL_TIME].iloc[-1])
+                    forecast_dates = pd.date_range(
+                        start=last_dt + pd.offsets.BDay(1),
+                        periods=len(df_pred), freq=pd.offsets.BDay()
+                    )
+                    df_pred.insert(0, COL_TIME, forecast_dates)
 
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=df_real[COL_TIME], y=df_real[COL_CLOSE],
-                    mode='lines+markers', name=VI_STRINGS["actual_price"],
-                    marker=dict(symbol='circle', color='blue'),
-                    line=dict(color='blue'),
-                    hovertemplate=(
-                        f'{VI_STRINGS["col_date"]}: %{{x|%Y-%m-%d}}'
-                        f'<br>{VI_STRINGS["actual_price"]}: %{{y:.2f}}<extra></extra>'
-                    ),
-                    yaxis='y1'
-                ))
-                fig.add_trace(go.Scatter(
-                    x=df_pred[COL_TIME], y=df_pred[COL_CLOSE],
-                    mode='lines+markers', name=VI_STRINGS["predicted_price"],
-                    marker=dict(symbol='x', color='orange'),
-                    line=dict(color='orange', dash='dash'),
-                    hovertemplate=(
-                        f'{VI_STRINGS["col_date"]}: %{{x|%Y-%m-%d}}'
-                        f'<br>{VI_STRINGS["predicted_price"]}: %{{y:.2f}}<extra></extra>'
-                    ),
-                    yaxis='y1'
-                ))
-                # bridge line, no hover
-                fig.add_trace(go.Scatter(
-                    x=[df_real[COL_TIME].iloc[-1], df_pred[COL_TIME].iloc[0]],
-                    y=[df_real[COL_CLOSE].iloc[-1], df_pred[COL_CLOSE].iloc[0]],
-                    mode='lines', line=dict(color='orange', dash='dash'),
-                    hoverinfo='skip', showlegend=False, yaxis='y1'
-                ))
-                if COL_VOLUME in df_real.columns:
-                    fig.add_trace(go.Bar(
-                        x=df_real[COL_TIME], y=df_real[COL_VOLUME],
-                        name=VI_STRINGS["col_volume"],
-                        marker_color='rgba(100, 100, 255, 0.3)',
-                        yaxis='y2', opacity=0.5
+                # ensure datetime
+                df_real[COL_TIME] = pd.to_datetime(df_real[COL_TIME])
+                df_pred[COL_TIME] = pd.to_datetime(df_pred[COL_TIME])
+
+                # Chart
+                with chart_ph.container():
+                    st.markdown("&nbsp;", unsafe_allow_html=True)
+                    st.subheader(VI_STRINGS["price_forecast"])
+
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(
+                        x=df_real[COL_TIME], y=df_real[COL_CLOSE],
+                        mode='lines+markers', name=VI_STRINGS["actual_price"],
+                        marker=dict(symbol='circle', color='blue'),
+                        line=dict(color='blue'),
+                        hovertemplate=(
+                            f'{VI_STRINGS["col_date"]}: %{{x|%Y-%m-%d}}'
+                            f'<br>{VI_STRINGS["actual_price"]}: %{{y:.2f}}<extra></extra>'
+                        ),
+                        yaxis='y1'
                     ))
-                fig.update_layout(
-                    xaxis_title=VI_STRINGS["col_date"],
-                    yaxis=dict(title=VI_STRINGS["col_close_price"], side='left'),
-                    yaxis2=dict(title=VI_STRINGS["col_volume"], overlaying='y', side='right', showgrid=False),
-                    legend=dict(orientation="h", x=0, y=1.1),
-                    hovermode='x unified',
-                    template='plotly_white',
-                    margin=dict(t=10, b=40, l=40, r=10),
-                    height=450
-                )
-                st.plotly_chart(fig, use_container_width=True)
+                    fig.add_trace(go.Scatter(
+                        x=df_pred[COL_TIME], y=df_pred[COL_CLOSE],
+                        mode='lines+markers', name=VI_STRINGS["predicted_price"],
+                        marker=dict(symbol='x', color='orange'),
+                        line=dict(color='orange', dash='dash'),
+                        hovertemplate=(
+                            f'{VI_STRINGS["col_date"]}: %{{x|%Y-%m-%d}}'
+                            f'<br>{VI_STRINGS["predicted_price"]}: %{{y:.2f}}<extra></extra>'
+                        ),
+                        yaxis='y1'
+                    ))
+                    # bridge line, no hover
+                    fig.add_trace(go.Scatter(
+                        x=[df_real[COL_TIME].iloc[-1], df_pred[COL_TIME].iloc[0]],
+                        y=[df_real[COL_CLOSE].iloc[-1], df_pred[COL_CLOSE].iloc[0]],
+                        mode='lines', line=dict(color='orange', dash='dash'),
+                        hoverinfo='skip', showlegend=False, yaxis='y1'
+                    ))
+                    if COL_VOLUME in df_real.columns:
+                        fig.add_trace(go.Bar(
+                            x=df_real[COL_TIME], y=df_real[COL_VOLUME],
+                            name=VI_STRINGS["col_volume"],
+                            marker_color='rgba(100, 100, 255, 0.3)',
+                            yaxis='y2', opacity=0.5
+                        ))
+                    fig.update_layout(
+                        xaxis_title=VI_STRINGS["col_date"],
+                        yaxis=dict(title=VI_STRINGS["col_close_price"], side='left'),
+                        yaxis2=dict(title=VI_STRINGS["col_volume"], overlaying='y', side='right', showgrid=False),
+                        legend=dict(orientation="h", x=0, y=1.1),
+                        hovermode='x unified',
+                        template='plotly_white',
+                        margin=dict(t=10, b=40, l=40, r=10),
+                        height=450
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
 
             # Financials income
             with finance_income_ph.container():

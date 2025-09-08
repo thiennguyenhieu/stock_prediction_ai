@@ -97,16 +97,8 @@ VI. Khuyến nghị
 
 PROMPT_FILTER = """
 Bạn là chuyên gia phân tích chứng khoán.
-Đầu vào: danh sách các mã cổ phiếu {tickers}.
-
-Nhiệm vụ: với mỗi mã, viết nhận xét ngắn gọn (1–2 câu).
-+ ⚠️ Cảnh báo nếu lợi nhuận chủ yếu đến từ khoản một lần (thanh lý tài sản, hoàn nhập dự phòng, lãi tài chính bất thường…) → “không bền vững”.
-+ ✅ Đánh giá cao nếu lợi nhuận đến từ hoạt động cốt lõi, ổn định và bền vững.
-
-Yêu cầu: Xuất kết quả dưới dạng bảng Markdown với 2 cột:
-+ Mã cổ phiếu
-+ Nhận xét (có icon ✅ hoặc ⚠️ ở đầu để phân loại)
-+ Danh sách mã tích cực: chỉ liệt kê các ticker được đánh giá tích cực/khả quan.
+Phân tích danh sách mã cổ phiếu đầu vào và cho biết cổ phiếu nào có tiềm năng tăng giá ổn định trong năm nay, giải thích ngắn gọn theo các chỉ số cơ bản (P/E, P/B, ROE, tăng trưởng doanh thu/EPS). Output ngắn gọn, liệt kê top cổ phiếu tiềm năng.
+Đầu vào: {json_tickers}
 """
 
 VI_STRINGS = {
@@ -142,8 +134,8 @@ VI_STRINGS = {
     "tab_analysis": "📊 Phân tích",
     "tab_filter": "🧰 Bộ lọc",
     "fitler_header": "Bộ lọc cổ phiếu",
-    "filter_value": "Lọc theo giá trị",
-    "filter_growth": "Lọc theo tăng trưởng",
+    "filter_value": "Cổ phiếu giá trị",
+    "filter_growth": "Cổ phiếu tăng trưởng",
     "filtering_value_spinner": "⏳ Đang lọc theo giá trị...",
     "filtering_growth_spinner": "⏳ Đang lọc theo tăng trưởng...",
     "filter_error_value": "Lỗi khi lọc theo giá trị: {e}",
