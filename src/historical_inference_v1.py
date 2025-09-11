@@ -107,5 +107,6 @@ def predict_close_price_series(raw_df: pd.DataFrame, forecast_steps: int = 5, de
     return pd.DataFrame(predictions, columns=[COL_CLOSE])
 
 if __name__ == "__main__":
-    out = get_close_prediction("DCM", interval=14)
-    print(out)
+    print(get_close_prediction("SHB", 14))
+    print(get_close_prediction("DRI", 14))
+    print(get_close_prediction("HPG", 14))
